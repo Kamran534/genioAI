@@ -1,8 +1,9 @@
+# GenioAI 🚀
+
 <div align="center">
   <img src="public/banner.png" alt="GenioAI Banner" width="100%" />
 </div>
 
-# GenioAI 🚀
 
 A modern, responsive landing page for an AI tools platform built with React, TypeScript, and Vite. GenioAI showcases AI-powered tools, pricing plans, testimonials, and includes a newsletter subscription feature.
 

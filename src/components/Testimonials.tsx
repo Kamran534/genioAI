@@ -60,20 +60,20 @@ export default function Testimonials() {
 
   return (
     <section id="testimonials" className="bg-gradient-to-br from-slate-50 to-indigo-50">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <Sparkles className="h-8 w-8 text-indigo-600" />
-            <h2 className="text-5xl font-bold text-slate-900 tracking-tight">Loved by Creators</h2>
-            <Sparkles className="h-8 w-8 text-indigo-600" />
+      <div className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16">
+        <div className="text-center mb-8 sm:mb-12">
+          <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4 sm:mb-6">
+            <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">Loved by Creators</h2>
+            <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
           </div>
-          <p className="text-lg text-slate-600">Real stories from people using GenioAI to create faster.</p>
+          <p className="text-sm sm:text-base lg:text-lg text-slate-600 px-4">Real stories from people using GenioAI to create faster.</p>
         </div>
         
         {/* Swiper Carousel Container */}
         <Swiper
           modules={[Navigation, Pagination, Autoplay]}
-          spaceBetween={30}
+          spaceBetween={20}
           slidesPerView={1}
           navigation={{
             nextEl: '.swiper-button-next',
@@ -89,10 +89,16 @@ export default function Testimonials() {
           }}
           loop={true}
           breakpoints={{
+            640: {
+              spaceBetween: 24,
+              slidesPerView: 1,
+            },
             768: {
+              spaceBetween: 30,
               slidesPerView: 2,
             },
             1024: {
+              spaceBetween: 30,
               slidesPerView: 3,
             },
           }}
@@ -100,49 +106,49 @@ export default function Testimonials() {
         >
           {items.map((t) => (
             <SwiperSlide key={t.name}>
-              <div className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-100 h-full">
+              <div className="bg-white rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-100 h-full">
                 {/* Header with profile */}
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                   <img 
                     src={t.image} 
                     alt={`${t.name}, ${t.role} - testimonial photo`}
-                    className="w-12 h-12 rounded-full object-cover ring-2 ring-indigo-100"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover ring-2 ring-indigo-100"
                     loading="lazy"
                     width="48"
                     height="48"
                   />
                   <div>
-                    <h4 className="font-semibold text-slate-900">{t.name}</h4>
-                    <p className="text-sm text-slate-500">{t.role}</p>
+                    <h4 className="font-semibold text-slate-900 text-sm sm:text-base">{t.name}</h4>
+                    <p className="text-xs sm:text-sm text-slate-500">{t.role}</p>
                   </div>
                 </div>
                 
                 {/* Rating */}
-                <div className="flex items-center gap-1 mb-4">
+                <div className="flex items-center gap-1 mb-3 sm:mb-4">
                   {[...Array(t.rating)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                    <Star key={i} className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-yellow-400 text-yellow-400" />
                   ))}
                 </div>
                 
                 {/* Quote */}
-                <blockquote className="text-slate-700 mb-4 leading-relaxed">
+                <blockquote className="text-slate-700 mb-3 sm:mb-4 leading-relaxed text-sm sm:text-base">
                   "{t.quote}"
                 </blockquote>
                 
                 {/* Engagement stats */}
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                  <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-slate-100">
+                  <div className="flex items-center gap-3 sm:gap-4">
                     <button className="flex items-center gap-1 text-slate-500 hover:text-red-500 transition-colors">
-                      <Heart className="w-4 h-4" />
-                      <span className="text-sm">{t.likes}</span>
+                      <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">{t.likes}</span>
                     </button>
                     <button className="flex items-center gap-1 text-slate-500 hover:text-blue-500 transition-colors">
-                      <MessageCircle className="w-4 h-4" />
-                      <span className="text-sm">{t.comments}</span>
+                      <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="text-xs sm:text-sm">{t.comments}</span>
                     </button>
                   </div>
                   <button className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <Share2 className="w-4 h-4" />
+                    <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
                 </div>
               </div>

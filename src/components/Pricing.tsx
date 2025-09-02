@@ -70,15 +70,15 @@ export default function Pricing() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.1),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(236,72,153,0.1),transparent_50%)]" />
       
-      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20">
+      <div className="relative mx-auto max-w-7xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16 lg:py-20">
         {/* Header */}
-        <div className="text-center mb-6">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <Sparkles className="h-8 w-8 text-indigo-600" />
-            <h2 className="text-5xl font-bold text-slate-900 tracking-tight">Choose Your Plan</h2>
-            <Sparkles className="h-8 w-8 text-indigo-600" />
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex items-center justify-center gap-1 sm:gap-2 mb-4 sm:mb-6">
+            <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight">Choose Your Plan</h2>
+            <Sparkles className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600" />
           </div>
-          <p className="text-xl text-slate-600 max-w-2xl mx-auto">Start for free and scale as you grow. No hidden fees, cancel anytime.</p>
+          <p className="text-base sm:text-lg lg:text-xl text-slate-600 max-w-xl sm:max-w-2xl mx-auto px-4">Start for free and scale as you grow. No hidden fees, cancel anytime.</p>
         </div>
 
         {/* Annual Billing Toggle */}
@@ -106,13 +106,13 @@ export default function Pricing() {
         </div>
 
         {/* Pricing Cards */}
-        <div className="flex justify-center gap-6 max-w-4xl mx-auto">
+        <div className="flex flex-col lg:flex-row justify-center gap-0 sm:gap-6 max-w-6xl mx-auto">
           {plans.map((plan, index) => {
             const IconComponent = plan.icon;
             return (
               <div 
                 key={plan.name} 
-                className="relative group animate-fade-in-up w-72"
+                className="relative group animate-fade-in-up w-full max-w-sm mx-auto lg:w-84"
                 style={{ animationDelay: `${index * 200}ms` }}
               >
                 {/* Popular Badge */}
@@ -125,43 +125,43 @@ export default function Pricing() {
                 )}
                 
                 {/* Card */}
-                <div className={`relative rounded-2xl border ${plan.borderColor} ${plan.bgColor} p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 h-full flex flex-col`}>
+                <div className={`relative rounded-2xl border ${plan.borderColor} ${plan.bgColor} p-4 sm:p-6 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 h-full flex flex-col`}>
                   {/* Gradient overlay on hover */}
                   <div className={`absolute inset-0 rounded-2xl bg-gradient-to-br ${plan.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
                   
                   {/* Icon */}
-                  <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br ${plan.color} text-white mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                    <IconComponent className="h-6 w-6" />
+                  <div className={`inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br ${plan.color} text-white mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    <IconComponent className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
                   
                   {/* Plan Info */}
-                  <div className="mb-4">
-                    <h3 className="text-xl font-bold text-slate-900 mb-1">{plan.name}</h3>
-                    <p className="text-sm text-slate-600 mb-3">{plan.description}</p>
+                  <div className="mb-3 sm:mb-4">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-1">{plan.name}</h3>
+                    <p className="text-xs sm:text-sm text-slate-600 mb-2 sm:mb-3">{plan.description}</p>
                     <div className="flex items-baseline">
-                      <span className="text-3xl font-bold text-slate-900">{plan.price}</span>
-                      <span className="text-sm text-slate-500 ml-1">{plan.per}</span>
+                      <span className="text-2xl sm:text-3xl font-bold text-slate-900">{plan.price}</span>
+                      <span className="text-xs sm:text-sm text-slate-500 ml-1">{plan.per}</span>
                     </div>
                   </div>
                   
                   {/* Features */}
-                  <ul className="space-y-2 mb-6 flex-grow">
+                  <ul className="space-y-1.5 sm:space-y-2 mb-4 sm:mb-6 flex-grow">
                     {plan.features.map((feature, featureIndex) => (
                       <li 
                         key={feature} 
                         className="flex items-start gap-2 group-hover:translate-x-1 transition-transform duration-300"
                         style={{ transitionDelay: `${featureIndex * 30}ms` }}
                       >
-                        <div className={`flex-shrink-0 w-4 h-4 rounded-full bg-gradient-to-br ${plan.color} flex items-center justify-center mt-0.5`}>
-                          <Check className="h-2.5 w-2.5 text-white" />
+                        <div className={`flex-shrink-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-gradient-to-br ${plan.color} flex items-center justify-center mt-0.5`}>
+                          <Check className="h-2 w-2 sm:h-2.5 sm:w-2.5 text-white" />
                         </div>
-                        <span className="text-sm text-slate-700 font-medium">{feature}</span>
+                        <span className="text-xs sm:text-sm text-slate-700 font-medium leading-relaxed">{feature}</span>
                       </li>
                     ))}
                   </ul>
                   
                   {/* CTA Button */}
-                  <button className={`w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all duration-300 group-hover:scale-105 cursor-pointer ${
+                  <button className={`w-full py-2.5 sm:py-3 px-3 sm:px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all duration-300 group-hover:scale-105 cursor-pointer ${
                     plan.popular 
                       ? `bg-gradient-to-r ${plan.color} text-white shadow-md hover:shadow-lg` 
                       : 'bg-white border border-slate-200 text-slate-900 hover:border-slate-300 hover:bg-slate-50'

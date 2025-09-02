@@ -75,27 +75,27 @@ export default function Newsletter() {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,0.1),transparent_50%)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(236,72,153,0.1),transparent_50%)]" />
       
-      <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 py-16">
+      <div className="relative mx-auto max-w-4xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16">
         <div className="text-center">
           {/* Icon */}
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white mb-6 shadow-lg">
-            <Mail className="h-8 w-8" />
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white mb-4 sm:mb-6 shadow-lg">
+            <Mail className="h-6 w-6 sm:h-8 sm:w-8" />
           </div>
           
           {/* Header */}
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <Sparkles className="h-6 w-6 text-indigo-600" />
-            <h2 className="text-4xl font-bold text-slate-900">Stay Updated</h2>
-            <Sparkles className="h-6 w-6 text-indigo-600" />
+          <div className="flex items-center justify-center gap-1 sm:gap-2 mb-3 sm:mb-4">
+            <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
+            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900">Stay Updated</h2>
+            <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600" />
           </div>
           
-          <p className="text-xl text-slate-600 mb-8 max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg lg:text-xl text-slate-600 mb-6 sm:mb-8 max-w-xl sm:max-w-2xl mx-auto px-4">
             Get the latest AI tools, tips, and exclusive content delivered to your inbox. 
             Join thousands of creators who are already ahead of the curve.
           </p>
           
           {/* Newsletter Form */}
-          <form onSubmit={handleSubmit} className="max-w-md mx-auto">
+          <form onSubmit={handleSubmit} className="max-w-sm sm:max-w-md mx-auto px-4">
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="flex-1">
                 <input
@@ -103,7 +103,7 @@ export default function Newsletter() {
                   value={state.email}
                   onChange={(e) => setState(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="Enter your email address"
-                  className={`w-full px-4 py-3 rounded-xl border text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 shadow-sm transition-colors ${
+                  className={`w-full px-3 sm:px-4 py-2.5 sm:py-3 rounded-lg sm:rounded-xl border text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 shadow-sm transition-colors text-sm sm:text-base ${
                     errors.email 
                       ? 'border-red-300 focus:ring-red-500 focus:border-red-500' 
                       : 'border-slate-300 focus:ring-indigo-500 focus:border-indigo-500'
@@ -113,8 +113,8 @@ export default function Newsletter() {
                   required
                 />
                 {errors.email && (
-                  <div id="email-error" className="mt-1 flex items-center gap-1 text-red-600 text-sm">
-                    <AlertCircle className="h-4 w-4" />
+                  <div id="email-error" className="mt-1 flex items-center gap-1 text-red-600 text-xs sm:text-sm">
+                    <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
                     {errors.email}
                   </div>
                 )}
@@ -122,7 +122,7 @@ export default function Newsletter() {
               <button
                 type="submit"
                 disabled={state.isLoading || state.isSubscribed}
-                className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 aria-label="Subscribe to newsletter"
               >
                 {state.isLoading ? (
@@ -161,17 +161,17 @@ export default function Newsletter() {
           )}
           
           {/* Trust Indicators */}
-          <div className="mt-8 flex items-center justify-center gap-6 text-slate-500 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
+          <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-slate-500 text-xs sm:text-sm">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full" />
               <span>No spam, ever</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full" />
               <span>Unsubscribe anytime</span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full" />
               <span>10k+ subscribers</span>
             </div>
           </div>
