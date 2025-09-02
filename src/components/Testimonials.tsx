@@ -26,7 +26,7 @@ export default function Testimonials() {
       image: client02,
       likes: 31,
       comments: 12,
-      rating: 5
+      rating: 4
     },
     { 
       name: 'David Lee', 
@@ -35,7 +35,7 @@ export default function Testimonials() {
       image: client03,
       likes: 19,
       comments: 6,
-      rating: 5
+      rating: 4
     },
     { 
       name: 'Emily Carter', 
@@ -44,7 +44,7 @@ export default function Testimonials() {
       image: client01,
       likes: 27,
       comments: 10,
-      rating: 5
+      rating: 3
     },
     { 
       name: 'Michael Brown', 

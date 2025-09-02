@@ -1,22 +1,15 @@
-import Hero from './components/Hero';
-import ToolsGrid from './components/ToolsGrid';
-import Testimonials from './components/Testimonials';
-import Pricing from './components/Pricing';
-import Newsletter from './components/Newsletter';
-import Footer from './components/Footer';
+import { Routes, Route } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
+import LandingPage from './pages/LandingPage';
+import Dashboard from './pages/Dashboard';
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-white text-slate-800">
-        <Hero />
-        <ToolsGrid />
-        <Testimonials />
-        <Pricing />
-        <Newsletter />
-        <Footer />
-      </div>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
     </ErrorBoundary>
   );
 }
