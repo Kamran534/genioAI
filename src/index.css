@@ -1,68 +1,190 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+*{
+  font-family: 'Outfit', sans-serif;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+:root{
+  /* Colors */
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-muted: #475569;
+  --color-border: #e2e8f0;
+  --color-primary: #4f46e5;
+  --color-primary-hover: #4338ca;
+
+  /* Typography */
+  --font-sans: 'Outfit', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  --base-font-size: 16px;
+  --line-height: 1.6;
+
+  /* Radius & Shadows */
+  --radius: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+html{
+  scroll-behavior: smooth;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+body{
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-size: var(--base-font-size);
+  line-height: var(--line-height);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+/* Optional helpers using the variables */
+.text-muted{ color: var(--color-muted); }
+.text-primary{ color: var(--color-primary); }
+.bg-primary{ background-color: var(--color-primary); }
+.bg-muted{ background-color: var(--color-border); }
+.border-default{ border-color: var(--color-border); }
+.rounded-default{ border-radius: var(--radius); }
+.shadow-sm-var{ box-shadow: var(--shadow-sm); }
+.shadow-md-var{ box-shadow: var(--shadow-md); }
+
+/* Auto-scrolling animation */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 20s linear infinite;
+}
+
+.animate-scroll-slow {
+  animation: scroll 30s linear infinite;
+}
+
+/* Card animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+/* Swiper Custom Styles */
+.testimonials-swiper {
+  padding: 20px 0 60px 0;
+}
+
+.testimonials-swiper .swiper-slide {
+  height: auto;
+}
+
+.testimonials-swiper .swiper-button-next,
+.testimonials-swiper .swiper-button-prev {
+  display: none; /* Hide default buttons */
+}
+
+.testimonials-swiper .swiper-pagination {
+  display: none; /* Hide default pagination */
+}
+
+
+
+/* Custom Pagination */
+.swiper-pagination-custom {
+  position: relative;
+}
+
+.swiper-pagination-custom .swiper-pagination-bullet {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: all 0.3s ease;
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  display: inline-block;
+  margin: 0 4px;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+.swiper-pagination-custom .swiper-pagination-bullet-active {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  transform: scale(1.2);
 }
+
+.swiper-pagination-custom .swiper-pagination-bullet:hover {
+  background: #94a3b8;
+}
+
+/* Brand colors: vibrant gradients (text + icon badges) */
+.brand-openai-text{
+  background: linear-gradient(135deg,#00c896,#00a67e,#008f73);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(0,168,126,0.25));
+}
+.brand-openai-badge{
+  background: radial-gradient(60% 60% at 30% 20%,#00e0aa,#00a67e);
+  color:#fff; box-shadow: 0 6px 20px rgba(0,166,126,0.35);
+}
+
+.brand-gemini-text{
+  background: linear-gradient(135deg,#7ba7ff,#4285f4,#174ea6);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(66,133,244,0.25));
+}
+.brand-gemini-badge{
+  background: conic-gradient(from 180deg,#7ba7ff,#4285f4,#174ea6,#7ba7ff);
+  color:#fff; box-shadow: 0 6px 20px rgba(66,133,244,0.35);
+}
+
+.brand-grok-text{
+  background: linear-gradient(135deg,#111827,#000,#4b5563);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));
+}
+.brand-grok-badge{
+  background: radial-gradient(50% 60% at 50% 50%,#111827,#000);
+  color:#fff; box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+}
+
+.brand-deepseek-text{
+  background: linear-gradient(135deg,#60a5fa,#1e40af,#0b3ea8);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(30,64,175,0.25));
+}
+.brand-deepseek-badge{
+  background: linear-gradient(135deg,#60a5fa,#1e40af);
+  color:#fff; box-shadow: 0 6px 20px rgba(30,64,175,0.35);
+}
+
+.brand-canva-text{
+  background: linear-gradient(135deg,#7ff3f3,#00c4cc,#00a3a8);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(0,196,204,0.25));
+}
+.brand-canva-badge{
+  background: radial-gradient(60% 60% at 40% 30%,#7ff3f3,#00c4cc);
+  color:#fff; box-shadow: 0 6px 20px rgba(0,196,204,0.35);
+}
+
+.brand-huggingface-text{
+  background: linear-gradient(135deg,#ffd166,#ff9e4a,#ff6b35);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 6px rgba(255,107,53,0.28));
+}
+.brand-huggingface-badge{
+  background: linear-gradient(135deg,#ffd166,#ff9e4a,#ff6b35);
+  color:#fff; box-shadow: 0 6px 20px rgba(255,107,53,0.35);
+}
+
+
