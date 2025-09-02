@@ -106,7 +106,7 @@ export default function Pricing() {
         </div>
 
         {/* Pricing Cards */}
-        <div className="flex flex-col lg:flex-row justify-center gap-0 sm:gap-6 max-w-6xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-center gap-0 sm:gap-6 max-w-6xl mx-auto">
           {plans.map((plan, index) => {
             const IconComponent = plan.icon;
             return (
