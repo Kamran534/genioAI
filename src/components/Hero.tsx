@@ -17,7 +17,7 @@ export default function Hero() {
     <section className="relative overflow-hidden" role="banner" aria-labelledby="hero-heading">
       <Header />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(99,102,241,0.15),rgba(255,255,255,0)),radial-gradient(45%_45%_at_80%_20%,rgba(236,72,153,0.14),rgba(255,255,255,0))]" />
-      <div className="relative mx-auto max-w-5xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16 lg:py-20 text-center mt-6 sm:mt-8 lg:mt-10">
+      <div className="relative mx-auto max-w-5xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16 lg:py-20 text-center mt-6 sm:mt-8 lg:mt-2">
         <h1 id="hero-heading" className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight leading-tight">
           Unleash your best work
           <br className="hidden sm:block" />

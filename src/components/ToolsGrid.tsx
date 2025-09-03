@@ -7,52 +7,72 @@ import {
   FileText,
   Sparkles
 } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function ToolsGrid() {
+  const { isSignedIn } = useUser();
+  const navigate = useNavigate();
+
   const cards = [
     { 
       title: 'AI Article Writer', 
       desc: 'Generate high-quality, engaging articles on any topic.',
       icon: PenTool,
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-blue-50',
+      path: '/dashboard/write-article'
     },
     { 
       title: 'Blog Title Generator', 
       desc: 'Find the perfect, catchy title for your blog posts.',
       icon: Type,
       color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      bgColor: 'bg-green-50',
+      path: '/dashboard/blog-titles'
     },
     { 
       title: 'AI Image Generation', 
       desc: 'Create stunning visuals with our AI image generation.',
       icon: Image,
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-purple-50',
+      path: '/dashboard/generate-images'
     },
     { 
       title: 'Background Removal', 
       desc: 'Effortlessly remove backgrounds from your images.',
       icon: Scissors,
       color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      bgColor: 'bg-orange-50',
+      path: '/dashboard/remove-background'
     },
     { 
       title: 'Object Removal', 
       desc: 'Remove unwanted objects from your images seamlessly.',
       icon: Eraser,
       color: 'text-red-600',
-      bgColor: 'bg-red-50'
+      bgColor: 'bg-red-50',
+      path: '/dashboard/remove-object'
     },
     { 
       title: 'Resume Reviewer', 
       desc: 'Get your resume reviewed by AI to improve your chances.',
       icon: FileText,
       color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50'
+      bgColor: 'bg-indigo-50',
+      path: '/dashboard/review-resume'
     },
   ];
+
+  const handleCardClick = (path: string) => {
+    if (isSignedIn) {
+      navigate(path);
+    } else {
+      // Navigate to dashboard which will show the login page
+      navigate('/dashboard');
+    }
+  };
 
   return (
     <section id="tools" className="mx-auto max-w-7xl px-3 sm:px-4 lg:px-8 py-8 sm:py-12">
@@ -70,6 +90,7 @@ export default function ToolsGrid() {
           return (
             <div 
               key={card.title} 
+              onClick={() => handleCardClick(card.path)}
               className="group rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm hover:shadow-lg transition-all duration-300 hover:-translate-y-1 hover:border-indigo-200 cursor-pointer animate-fade-in-up"
               style={{ animationDelay: `${index * 100}ms` }}
             >
@@ -79,7 +100,7 @@ export default function ToolsGrid() {
               <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold group-hover:text-indigo-600 transition-colors duration-300">{card.title}</h3>
               <p className="mt-2 text-xs sm:text-sm text-slate-600 group-hover:text-slate-700 transition-colors duration-300 leading-relaxed">{card.desc}</p>
               <div className="mt-3 sm:mt-4 flex items-center text-indigo-600 text-xs sm:text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                Try it now →
+                {isSignedIn ? 'Try it now →' : 'Sign in to use →'}
               </div>
             </div>
           );

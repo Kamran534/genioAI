@@ -1,10 +1,12 @@
 import { useUser, Protect, UserButton } from '@clerk/clerk-react';
 import { 
-  LayoutDashboard, 
-  FileText, 
-  Image, 
-  Settings, 
-  User, 
+  Home,
+  PenTool, 
+  Hash,
+  Image as ImageIcon, 
+  Layers,
+  Scissors,
+  FileText,
   Menu,
   X,
   Bell,
@@ -18,10 +20,13 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navigation = [
-    { name: 'Dashboard', href: '#', icon: LayoutDashboard, current: true },
-    { name: 'Articles', href: '#', icon: FileText, current: false },
-    { name: 'Images', href: '#', icon: Image, current: false },
-    { name: 'Settings', href: '#', icon: Settings, current: false },
+    { name: 'Dashboard', href: '#', icon: Home, current: true },
+    { name: 'Write Article', href: '#', icon: PenTool, current: false },
+    { name: 'Blog Titles', href: '#', icon: Hash, current: false },
+    { name: 'Generate Images', href: '#', icon: ImageIcon, current: false },
+    { name: 'Remove Background', href: '#', icon: Layers, current: false },
+    { name: 'Remove Object', href: '#', icon: Scissors, current: false },
+    { name: 'Review Resume', href: '#', icon: FileText, current: false },
   ];
 
   const stats = [
@@ -65,9 +70,9 @@ export default function Dashboard() {
                     href={item.href}
                     className={`${
                       item.current
-                        ? 'bg-indigo-100 text-indigo-700'
+                        ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                    } group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200`}
                   >
                     <Icon className="mr-3 h-5 w-5" />
                     {item.name}
@@ -115,9 +120,9 @@ export default function Dashboard() {
                     href={item.href}
                     className={`${
                       item.current
-                        ? 'bg-indigo-100 text-indigo-700'
+                        ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg'
                         : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    } group flex items-center px-2 py-2 text-sm font-medium rounded-md`}
+                    } group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200`}
                   >
                     <Icon className="mr-3 h-5 w-5" />
                     {item.name}
@@ -290,21 +295,21 @@ export default function Dashboard() {
                   <div className="px-4 py-5 sm:p-6">
                     <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Quick Actions</h3>
                     <div className="grid grid-cols-2 gap-4">
-                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
-                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-900">New Article</p>
+                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors">
+                        <PenTool className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-900">Write Article</p>
                       </button>
-                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
-                        <Image className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors">
+                        <ImageIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                         <p className="text-sm font-medium text-gray-900">Generate Image</p>
                       </button>
-                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
-                        <Settings className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-900">Settings</p>
+                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors">
+                        <Layers className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-900">Remove Background</p>
                       </button>
-                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
-                        <User className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm font-medium text-gray-900">Profile</p>
+                      <button className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors">
+                        <FileText className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm font-medium text-gray-900">Review Resume</p>
                       </button>
                     </div>
                   </div>

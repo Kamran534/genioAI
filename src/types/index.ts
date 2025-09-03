@@ -76,3 +76,40 @@ export interface AnimationProps {
   duration?: number;
   direction?: 'up' | 'down' | 'left' | 'right';
 }
+
+// Community types
+export interface CommunityAuthor {
+  name: string;
+  avatar: string;
+  verified: boolean;
+}
+
+export interface CommunityImage {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  author: CommunityAuthor;
+  likes: number;
+  downloads: number;
+  views: number;
+  tags: string[];
+  createdAt: string;
+  isLiked: boolean;
+  category: string;
+}
+
+export interface CommunityFilters {
+  category: string;
+  sortBy: string;
+  searchQuery: string;
+  viewMode: 'grid' | 'list';
+}
+
+export interface UploadImageData {
+  title: string;
+  description: string;
+  tags: string[];
+  category: string;
+  file: File | null;
+}

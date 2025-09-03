@@ -23,6 +23,14 @@ export default function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1 rounded-full bg-white/60 backdrop-blur px-2 py-1 border border-white/40 shadow-sm">
+            {isSignedIn && (
+              <button 
+                onClick={() => navigate('/dashboard/community')}
+                className="px-3 py-1.5 cursor-pointer text-sm text-slate-600 hover:text-slate-900 rounded-full hover:bg-white transition-colors"
+              >
+                Community
+              </button>
+            )}
             <button 
               onClick={() => {
                 document.getElementById('tools')?.scrollIntoView({ behavior: 'smooth' });
@@ -111,6 +119,17 @@ export default function Header() {
         {isMenuOpen && (
           <div className="lg:hidden mt-2 rounded-2xl border border-white/30 bg-white/90 backdrop-blur-xl shadow-lg ring-1 ring-black/5 p-4">
             <nav className="flex flex-col gap-2">
+              {isSignedIn && (
+                <button 
+                  onClick={() => {
+                    navigate('/dashboard/community');
+                    setIsMenuOpen(false);
+                  }}
+                  className="px-4 py-3 text-sm text-slate-600 hover:text-slate-900 rounded-xl hover:bg-white/60 transition-colors text-left"
+                >
+                  Community
+                </button>
+              )}
               <button 
                 onClick={() => {
                   document.getElementById('tools')?.scrollIntoView({ behavior: 'smooth' });
