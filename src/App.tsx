@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import ErrorBoundary from './components/ErrorBoundary';
 import LandingPage from './pages/LandingPage';
+import ArticlePreview from './pages/ArticlePreview';
 import Community from './pages/dashboard/Community';
 import DashboardLayout from './components/DashboardLayout';
 import DashboardHome from './pages/dashboard/DashboardHome';
@@ -16,6 +17,7 @@ export default function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/preview" element={<ArticlePreview />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardHome />} />
           <Route path="community" element={<Community />} />

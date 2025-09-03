@@ -152,7 +152,7 @@ export default function DashboardLayout() {
               <span className="text-2xl font-bold text-gray-800">GenioAI</span>
             </button>
           </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
+          <nav className="flex-1 space-y-1 px-2 py-4 z-10">
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
