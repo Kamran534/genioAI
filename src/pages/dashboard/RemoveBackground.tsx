@@ -1,10 +1,15 @@
-import { useState } from 'react';
-import { Layers, Upload, Download, RotateCcw, Check, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Layers, Download, RotateCcw, Check } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
 export default function RemoveBackground() {
+  const { user, isLoaded } = useUser();
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [freeLeft, setFreeLeft] = useState<number>(5);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -17,7 +22,39 @@ export default function RemoveBackground() {
     }
   };
 
+  // Detect premium plan from Clerk
+  React.useEffect(() => {
+    if (!isLoaded) return;
+    type Meta = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
+    const pub = user?.publicMetadata as Meta;
+    const unsafe = user?.unsafeMetadata as Meta;
+    const norm = (v: unknown) => (v == null ? '' : String(v).toLowerCase().trim());
+    const plan = norm(pub?.plan ?? unsafe?.plan ?? pub?.tier ?? unsafe?.tier ?? pub?.currentPlan ?? unsafe?.currentPlan);
+    const flag = norm(pub?.isPremium ?? unsafe?.isPremium);
+    const premium = ['premium', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
+    setIsPremium(premium);
+
+    if (!premium) {
+      const raw = localStorage.getItem('bgFreeLeft');
+      let stored = Number(raw);
+      if (Number.isNaN(stored) || stored < 0 || stored > 5) {
+        stored = 5;
+        localStorage.setItem('bgFreeLeft', '5');
+      }
+      setFreeLeft(stored);
+    }
+  }, [isLoaded, user]);
+
   const handleRemoveBackground = async () => {
+    if (!isPremium) {
+      if (freeLeft <= 0) {
+        setShowUpgrade(true);
+        return;
+      }
+      const next = Math.max(0, freeLeft - 1);
+      setFreeLeft(next);
+      localStorage.setItem('bgFreeLeft', String(next));
+    }
     if (!uploadedImage) return;
     
     setIsProcessing(true);
@@ -29,218 +66,149 @@ export default function RemoveBackground() {
     }, 3000);
   };
 
-  const recentProcessed = [
-    { id: 1, name: 'product-photo.jpg', date: '2 hours ago', size: '2.1 MB' },
-    { id: 2, name: 'portrait.png', date: '1 day ago', size: '1.8 MB' },
-    { id: 3, name: 'logo-design.jpg', date: '3 days ago', size: '0.9 MB' },
-  ];
+  // (Reserved) Recent processed list can be shown in a future enhancement
 
   return (
     <>
-      {/* Page header */}
-      {/* <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
-          <Layers className="h-6 w-6 mr-3 text-purple-600" />
-          Remove Background
-        </h1>
-        <p className="mt-2 text-sm text-gray-700">
-          Remove backgrounds from images automatically with AI-powered precision.
-        </p>
-      </div> */}
+      {/* Top usage / upgrade bar */}
+      <div className="max-w-7xl mx-auto mb-4">
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2">
+          <div className="text-sm text-gray-700 flex items-center gap-3">
+            <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isPremium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+              Plan: {isPremium ? 'Premium' : 'Free'}
+            </span>
+            {!isPremium && (
+              <span>
+                Free removals left: <span className="font-semibold">{freeLeft}</span>
+              </span>
+            )}
+          </div>
+          {!isPremium && (
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
+            >
+              Go Premium
+            </button>
+          )}
+        </div>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Image Processing */}
-        <div className="lg:col-span-2">
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Process Image</h3>
-              
-              {!uploadedImage ? (
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">Upload an Image</h4>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Upload an image to remove its background automatically
-                  </p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    id="image-upload"
-                  />
-                  <label
-                    htmlFor="image-upload"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 cursor-pointer"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Choose Image
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    PNG, JPG, JPEG up to 10MB
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Original Image */}
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">Original Image</h4>
-                    <div className="relative">
-                      <img
-                        src={uploadedImage}
-                        alt="Original"
-                        className="w-full h-64 object-contain border rounded-lg bg-gray-50"
-                      />
-                    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Upload Card */}
+        <div className="bg-white shadow rounded-xl border border-gray-100">
+          <div className="px-6 py-6 sm:px-8 sm:py-7">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+              <Layers className="h-5 w-5 mr-2 text-orange-500" />
+              Background Removal
+            </h3>
+            <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+              Upload a product, portrait, or logo image and instantly remove its background.
+              Results are downloadable as transparent PNGs, ideal for stores, thumbnails, and mockups.
+            </p>
+
+            <div className="space-y-5">
+              <div>
+                <p className="text-sm font-medium text-gray-800 mb-2">Upload image</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="block w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-2 shadow-sm focus:border-orange-500 focus:ring-orange-500 sm:text-sm"
+                />
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="flex items-start">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2" />
+                    <p className="text-xs text-gray-600">Best with high-contrast subjects</p>
                   </div>
-
-                  {/* Process Button */}
-                  <button
-                    onClick={handleRemoveBackground}
-                    disabled={isProcessing}
-                    className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Layers className="h-4 w-4 mr-2" />
-                        Remove Background
-                      </>
-                    )}
-                  </button>
-
-                  {/* Processed Image */}
-                  {processedImage && (
-                    <div>
-                      <h4 className="text-md font-medium text-gray-900 mb-2">Processed Image</h4>
-                      <div className="relative">
-                        <img
-                          src={processedImage}
-                          alt="Processed"
-                          className="w-full h-64 object-contain border rounded-lg bg-gray-50"
-                        />
-                        <div className="absolute top-2 right-2 flex space-x-2">
-                          <button className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-                            <Download className="h-4 w-4 text-gray-700" />
-                          </button>
-                          <button className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors">
-                            <RotateCcw className="h-4 w-4 text-gray-700" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  <div className="flex justify-between">
-                    <button
-                      onClick={() => {
-                        setUploadedImage(null);
-                        setProcessedImage(null);
-                      }}
-                      className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-                    >
-                      <X className="h-4 w-4 mr-2" />
-                      Upload New Image
-                    </button>
-                    
-                    {processedImage && (
-                      <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                        <Download className="h-4 w-4 mr-2" />
-                        Download Result
-                      </button>
-                    )}
+                  <div className="flex items-start">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2" />
+                    <p className="text-xs text-gray-600">Supports JPG, PNG up to 10MB</p>
+                  </div>
+                  <div className="flex items-start">
+                    <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2" />
+                    <p className="text-xs text-gray-600">Transparent background output</p>
                   </div>
                 </div>
-              )}
+              </div>
+
+              <button
+                onClick={handleRemoveBackground}
+                disabled={!uploadedImage || isProcessing}
+                className="w-full inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Remove background...
+                  </>
+                ) : (
+                  <>
+                    <Layers className="h-4 w-4 mr-2" />
+                    Remove background
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Processing Info */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">How it Works</h3>
-              <div className="space-y-3">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-purple-600">1</span>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900">Upload Image</p>
-                    <p className="text-xs text-gray-600">Choose any image with a background</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-purple-600">2</span>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900">AI Processing</p>
-                    <p className="text-xs text-gray-600">Our AI automatically detects and removes the background</p>
-                  </div>
-                </div>
-                <div className="flex items-start">
-                  <div className="flex-shrink-0 w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-medium text-purple-600">3</span>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-gray-900">Download Result</p>
-                    <p className="text-xs text-gray-600">Get your image with transparent background</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Right: Processed Card */}
+        <div className="bg-white shadow rounded-xl border border-gray-100">
+          <div className="px-5 py-5 sm:p-6 h-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Layers className="h-5 w-5 mr-2 text-orange-500" />
+              Processed Image
+            </h3>
 
-          {/* Recent Processed */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Files</h3>
-              <div className="space-y-3">
-                {recentProcessed.map((file) => (
-                  <div key={file.id} className="flex items-center justify-between p-2 border rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                      <p className="text-xs text-gray-500">{file.date} • {file.size}</p>
-                    </div>
-                    <button className="p-1 text-gray-400 hover:text-gray-600">
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Tips */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Tips for Best Results</h3>
-              <div className="space-y-2">
-                <div className="flex items-start">
-                  <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Use high contrast between subject and background</p>
-                </div>
-                <div className="flex items-start">
-                  <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Avoid complex backgrounds with similar colors</p>
-                </div>
-                <div className="flex items-start">
-                  <Check className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Higher resolution images work better</p>
+            {processedImage ? (
+              <div className="relative">
+                <img
+                  src={processedImage}
+                  alt="Processed"
+                  className="w-full h-80 object-contain  rounded-lg bg-gray-50"
+                />
+                <div className="absolute top-3 right-3 flex space-x-2">
+                  <button className="p-2 bg-white rounded-full shadow hover:bg-gray-100 transition-colors">
+                    <Download className="h-4 w-4 text-gray-700" />
+                  </button>
+                  <button className="p-2 bg-white rounded-full shadow hover:bg-gray-100 transition-colors" onClick={() => setProcessedImage(null)}>
+                    <RotateCcw className="h-4 w-4 text-gray-700" />
+                  </button>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="h-80 rounded-lg bg-gradient-to-b from-gray-50 to-white flex flex-col items-center justify-center text-center">
+                <Layers className="h-10 w-10 text-gray-300 mb-3" />
+                <p className="text-sm text-gray-600">Upload an image and click "Remove background" to get started</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {showUpgrade && (
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-white/10 backdrop-blur-md">
+          <div className="bg-white/80 backdrop-blur rounded-xl p-6 max-w-md w-full border border-white/40 shadow-lg text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Go Premium</h3>
+            <p className="text-sm text-gray-800 mb-5">Background removal is a Premium feature. Upgrade to continue.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => (window.location.href = '/billing')}
+                className="px-4 py-2.5 text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-400 to-red-500 hover:from-orange-500 hover:to-red-600 shadow cursor-pointer"
+              >
+                Upgrade now
+              </button>
+              <button
+                onClick={() => setShowUpgrade(false)}
+                className="px-4 py-2.5 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

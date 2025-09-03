@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { FileText, Upload, Download, CheckCircle, AlertCircle, Star, TrendingUp, Users } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, Download, CheckCircle, AlertCircle } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
 interface AnalysisResults {
   score: number;
@@ -11,9 +12,13 @@ interface AnalysisResults {
 }
 
 export default function ReviewResume() {
+  const { user, isLoaded } = useUser();
   const [resumeText, setResumeText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResults, setAnalysisResults] = useState<AnalysisResults | null>(null);
+  const [isPremium, setIsPremium] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [freeLeft, setFreeLeft] = useState<number>(5);
 
   const handleResumeUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -26,8 +31,40 @@ export default function ReviewResume() {
     }
   };
 
+  // Detect premium plan and initialize free quota for resume reviews
+  useEffect(() => {
+    if (!isLoaded) return;
+    type Meta = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
+    const pub = user?.publicMetadata as Meta;
+    const unsafe = user?.unsafeMetadata as Meta;
+    const norm = (v: unknown) => (v == null ? '' : String(v).toLowerCase().trim());
+    const plan = norm(pub?.plan ?? unsafe?.plan ?? pub?.tier ?? unsafe?.tier ?? pub?.currentPlan ?? unsafe?.currentPlan);
+    const flag = norm(pub?.isPremium ?? unsafe?.isPremium);
+    const premium = ['premium', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
+    setIsPremium(premium);
+
+    if (!premium) {
+      const raw = localStorage.getItem('resumeFreeLeft');
+      let stored = Number(raw);
+      if (Number.isNaN(stored) || stored < 0 || stored > 5) {
+        stored = 5;
+        localStorage.setItem('resumeFreeLeft', '5');
+      }
+      setFreeLeft(stored);
+    }
+  }, [isLoaded, user]);
+
   const handleAnalyzeResume = async () => {
     if (!resumeText.trim()) return;
+    if (!isPremium) {
+      if (freeLeft <= 0) {
+        setShowUpgrade(true);
+        return;
+      }
+      const next = Math.max(0, freeLeft - 1);
+      setFreeLeft(next);
+      localStorage.setItem('resumeFreeLeft', String(next));
+    }
     
     setIsAnalyzing(true);
     // Simulate API call
@@ -54,11 +91,7 @@ export default function ReviewResume() {
     }, 3000);
   };
 
-  const recentResumes = [
-    { id: 1, name: 'Software Engineer Resume.pdf', date: '2 hours ago', score: 88 },
-    { id: 2, name: 'Marketing Manager Resume.docx', date: '1 day ago', score: 92 },
-    { id: 3, name: 'Data Analyst Resume.pdf', date: '3 days ago', score: 85 },
-  ];
+  
 
   return (
     <>
@@ -73,207 +106,158 @@ export default function ReviewResume() {
         </p>
       </div> */}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Resume Analysis */}
-        <div className="lg:col-span-2">
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Resume Analysis</h3>
-              
-              {!resumeText ? (
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">Upload Your Resume</h4>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Upload your resume to get AI-powered feedback and suggestions
-                  </p>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.txt"
-                    onChange={handleResumeUpload}
-                    className="hidden"
-                    id="resume-upload"
-                  />
-                  <label
-                    htmlFor="resume-upload"
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 cursor-pointer"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Choose File
-                  </label>
-                  <p className="text-xs text-gray-500 mt-2">
-                    PDF, DOC, DOCX, TXT up to 5MB
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Resume Text */}
-                  <div>
-                    <h4 className="text-md font-medium text-gray-900 mb-2">Resume Content</h4>
-                    <textarea
-                      rows={8}
-                      value={resumeText}
-                      onChange={(e) => setResumeText(e.target.value)}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-purple-500 focus:ring-purple-500 sm:text-sm"
-                      placeholder="Paste your resume content here..."
-                    />
-                  </div>
+      {/* Top usage / upgrade bar */}
+      <div className="max-w-7xl mx-auto mb-4">
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2">
+          <div className="text-sm text-gray-700 flex items-center gap-3">
+            <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isPremium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+              Plan: {isPremium ? 'Premium' : 'Free'}
+            </span>
+            {!isPremium && (
+              <span>
+                Free reviews left: <span className="font-semibold">{freeLeft}</span>
+              </span>
+            )}
+          </div>
+          {!isPremium && (
+            <button
+              onClick={() => setShowUpgrade(true)}
+              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
+            >
+              Go Premium
+            </button>
+          )}
+        </div>
+      </div>
 
-                  {/* Analyze Button */}
-                  <button
-                    onClick={handleAnalyzeResume}
-                    disabled={!resumeText.trim() || isAnalyzing}
-                    className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isAnalyzing ? (
-                      <>
-                        <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                        Analyzing Resume...
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="h-4 w-4 mr-2" />
-                        Analyze Resume
-                      </>
-                    )}
-                  </button>
-
-                  {/* Analysis Results */}
-                  {analysisResults && (
-                    <div className="space-y-4">
-                      {/* Overall Score */}
-                      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h4 className="text-lg font-medium text-gray-900">Overall Score</h4>
-                            <p className="text-sm text-gray-600">Based on ATS optimization and content quality</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-3xl font-bold text-purple-600">{analysisResults.score}</div>
-                            <div className="text-sm text-gray-600">out of 100</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Strengths */}
-                      <div>
-                        <h4 className="text-md font-medium text-gray-900 mb-2 flex items-center">
-                          <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-                          Strengths
-                        </h4>
-                        <ul className="space-y-2">
-                          {analysisResults.strengths.map((strength: string, index: number) => (
-                            <li key={index} className="flex items-start">
-                              <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                              <span className="text-sm text-gray-700">{strength}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Improvements */}
-                      <div>
-                        <h4 className="text-md font-medium text-gray-900 mb-2 flex items-center">
-                          <AlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
-                          Areas for Improvement
-                        </h4>
-                        <ul className="space-y-2">
-                          {analysisResults.improvements.map((improvement: string, index: number) => (
-                            <li key={index} className="flex items-start">
-                              <AlertCircle className="h-4 w-4 text-yellow-500 mr-2 mt-0.5" />
-                              <span className="text-sm text-gray-700">{improvement}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* ATS Score */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white border rounded-lg p-3">
-                          <div className="flex items-center">
-                            <TrendingUp className="h-5 w-5 text-blue-500 mr-2" />
-                            <span className="text-sm font-medium text-gray-900">ATS Score</span>
-                          </div>
-                          <div className="text-2xl font-bold text-blue-600 mt-1">{analysisResults.atsScore}</div>
-                        </div>
-                        <div className="bg-white border rounded-lg p-3">
-                          <div className="flex items-center">
-                            <Users className="h-5 w-5 text-green-500 mr-2" />
-                            <span className="text-sm font-medium text-gray-900">Keyword Matches</span>
-                          </div>
-                          <div className="text-2xl font-bold text-green-600 mt-1">{analysisResults.keywordMatches}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Upload Card */}
+        <div className="bg-white shadow rounded-xl overflow-hidden">
+          <div className="pt-8 pl-5 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-base font-semibold text-gray-900">Resume Review</h3>
+          </div>
+          <div className="p-5 space-y-5">
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Upload your resume to receive AI-powered feedback on strengths, areas to improve,
+              and ATS keyword coverage. We’ll analyze structure, clarity, and impact so you can
+              stand out.
+            </p>
+            <div>
+              <label htmlFor="resume-upload" className="block text-sm font-medium text-gray-700 mb-2">Upload Resume</label>
+              <input
+                id="resume-upload"
+                type="file"
+                accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                onChange={handleResumeUpload}
+                className="block w-full text-sm text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-emerald-400 file:text-white hover:file:bg-emerald-500 transition-colors cursor-pointer border border-gray-300 rounded-md"
+              />
+              <p className="mt-1 text-xs text-gray-500">Supports PDF, PNG, JPG formats</p>
             </div>
+
+            <button
+              onClick={handleAnalyzeResume}
+              disabled={!resumeText.trim() || isAnalyzing}
+              className="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAnalyzing ? (
+                <>
+                  <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Review Resume
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Review Resume
+                </>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Recent Resumes */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Resumes</h3>
-              <div className="space-y-3">
-                {recentResumes.map((resume) => (
-                  <div key={resume.id} className="flex items-center justify-between p-2 border rounded-lg">
+        {/* Right: Results Card */}
+        <div className="bg-white shadow rounded-xl overflow-hidden">
+          <div className="pt-8 pl-5 flex items-center gap-2">
+            <FileText className="h-5 w-5 text-emerald-600" />
+            <h3 className="text-base font-semibold text-gray-900">Analysis Results</h3>
+          </div>
+          <div className="p-5">
+            {!analysisResults ? (
+              <div className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-lg text-center text-sm text-gray-500">
+                <FileText className="h-8 w-8 text-gray-400 mb-3" />
+                Upload your resume and click "Review Resume" to get started
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-emerald-50 to-cyan-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{resume.name}</p>
-                      <p className="text-xs text-gray-500">{resume.date}</p>
+                      <h4 className="text-lg font-medium text-gray-900">Overall Score</h4>
+                      <p className="text-sm text-gray-600">Based on ATS optimization and content quality</p>
                     </div>
-                    <div className="flex items-center">
-                      <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                      <span className="text-sm font-medium text-gray-900">{resume.score}</span>
+                    <div className="text-right">
+                      <div className="text-3xl font-bold text-emerald-600">{analysisResults.score}</div>
+                      <div className="text-sm text-gray-600">out of 100</div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
+                </div>
 
-          {/* Resume Tips */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-4 py-5 sm:p-6">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Resume Tips</h3>
-              <div className="space-y-3">
-                <div className="flex items-start">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Use action verbs to describe achievements</p>
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-2 flex items-center">
+                    <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                    Strengths
+                  </h4>
+                  <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                    {analysisResults.strengths.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="flex items-start">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Include quantifiable results and metrics</p>
-                </div>
-                <div className="flex items-start">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Optimize for ATS with relevant keywords</p>
-                </div>
-                <div className="flex items-start">
-                  <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5" />
-                  <p className="text-sm text-gray-700">Keep formatting clean and consistent</p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Download Options */}
-          {analysisResults && (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-4 py-5 sm:p-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Download Report</h3>
-                <button className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-2 flex items-center">
+                    <AlertCircle className="h-5 w-5 text-yellow-500 mr-2" />
+                    Areas for Improvement
+                  </h4>
+                  <ul className="list-disc list-inside text-sm text-gray-700 space-y-1">
+                    {analysisResults.improvements.map((s, i) => (
+                      <li key={i}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <button className="w-full inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700">
                   <Download className="h-4 w-4 mr-2" />
                   Download Analysis Report
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
+
+      {showUpgrade && (
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-white/10 backdrop-blur-md">
+          <div className="bg-white/80 backdrop-blur rounded-xl p-6 max-w-md w-full border border-white/40 shadow-lg text-center">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Go Premium</h3>
+            <p className="text-sm text-gray-800 mb-5">Resume review is a Premium feature. Upgrade to continue.</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => (window.location.href = '/billing')}
+                className="px-4 py-2.5 text-sm font-medium rounded-md text-white bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-600 hover:to-cyan-700 shadow cursor-pointer"
+              >
+                Upgrade now
+              </button>
+              <button
+                onClick={() => setShowUpgrade(false)}
+                className="px-4 py-2.5 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

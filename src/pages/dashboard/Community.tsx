@@ -1,19 +1,17 @@
-import { useState, useRef } from 'react';
-import { 
-  Heart, 
-  Share2, 
-  Download, 
-  Filter, 
-  Grid, 
-  List, 
-  Upload,
+import { useState } from 'react';
+import {
+  Heart,
+  Download,
+  Filter,
   Search,
-  Eye,
-  Calendar,
-  Tag,
-  MoreVertical,
-  X
+  ChevronDown,
+  FlipHorizontal2,
+  Copy,
+  Check
 } from 'lucide-react';
+import client01 from '../../assets/client 01.png';
+import client02 from '../../assets/client 02.png';
+import client03 from '../../assets/client 03.png';
 
 // Temporary fix for export issue
 interface CommunityImage {
@@ -21,6 +19,7 @@ interface CommunityImage {
   title: string;
   description: string;
   imageUrl: string;
+  prompt: string;
   author: {
     name: string;
     avatar: string;
@@ -35,13 +34,7 @@ interface CommunityImage {
   category: string;
 }
 
-interface UploadImageData {
-  title: string;
-  description: string;
-  tags: string[];
-  category: string;
-  file: File | null;
-}
+// Upload interface removed with share feature
 
 // Mock data for community images
 const mockImages: CommunityImage[] = [
@@ -49,7 +42,8 @@ const mockImages: CommunityImage[] = [
     id: '1',
     title: 'Abstract Digital Art',
     description: 'A beautiful abstract digital artwork created with AI',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client01,
+    prompt: 'Create a vibrant abstract digital artwork with fluid shapes, glowing gradients, and high-contrast lighting, 4k, ultra-detailed, cinematic lighting',
     author: {
       name: 'Alex Chen',
       avatar: '/api/placeholder/40/40',
@@ -67,7 +61,8 @@ const mockImages: CommunityImage[] = [
     id: '2',
     title: 'Nature Landscape',
     description: 'Stunning mountain landscape with perfect lighting',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client02,
+    prompt: 'Photorealistic sunrise over snow-capped mountains, golden hour, dramatic clouds, crisp air, detailed textures, 50mm lens, high dynamic range',
     author: {
       name: 'Sarah Johnson',
       avatar: '/api/placeholder/40/40',
@@ -85,7 +80,8 @@ const mockImages: CommunityImage[] = [
     id: '3',
     title: 'Modern UI Design',
     description: 'Clean and modern user interface design mockup',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client03,
+    prompt: 'Minimal modern app dashboard UI, glassmorphism, soft shadows, 8pt grid, neutral palette with accent purple, responsive widgets, elegant typography',
     author: {
       name: 'Mike Rodriguez',
       avatar: '/api/placeholder/40/40',
@@ -103,7 +99,8 @@ const mockImages: CommunityImage[] = [
     id: '4',
     title: 'Space Exploration',
     description: 'Futuristic space scene with planets and stars',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client02,
+    prompt: 'Epic sci-fi space vista with multiple colorful planets, nebula dust, starfields, rim lighting, cinematic scale, ultra wide, volumetric lighting',
     author: {
       name: 'Emma Wilson',
       avatar: '/api/placeholder/40/40',
@@ -121,7 +118,8 @@ const mockImages: CommunityImage[] = [
     id: '5',
     title: 'Minimalist Logo',
     description: 'Simple and elegant logo design concept',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client03,
+    prompt: 'Minimalist logo mark for a creative AI brand, geometric shapes, negative space, bold yet friendly, flat vector, monochrome with optional accent',
     author: {
       name: 'David Kim',
       avatar: '/api/placeholder/40/40',
@@ -139,7 +137,8 @@ const mockImages: CommunityImage[] = [
     id: '6',
     title: 'Urban Architecture',
     description: 'Modern cityscape with impressive architectural details',
-    imageUrl: '/api/placeholder/400/300',
+    imageUrl: client01,
+    prompt: 'Contemporary urban skyline at blue hour, reflective glass buildings, leading lines, symmetrical composition, high detail, street-level perspective',
     author: {
       name: 'Lisa Park',
       avatar: '/api/placeholder/40/40',
@@ -160,20 +159,11 @@ const sortOptions = ['Latest', 'Popular', 'Most Downloaded', 'Most Liked'];
 
 export default function Community() {
   const [images, setImages] = useState<CommunityImage[]>(mockImages);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [sortBy, setSortBy] = useState('Latest');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploadData, setUploadData] = useState<UploadImageData>({
-    title: '',
-    description: '',
-    tags: [],
-    category: 'Art',
-    file: null
-  });
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [flipped, setFlipped] = useState<Record<string, boolean>>({});
+  const [copied, setCopied] = useState<Record<string, boolean>>({});
 
   const handleLike = (imageId: string) => {
     setImages(prev => prev.map(img => 
@@ -187,82 +177,44 @@ export default function Community() {
     ));
   };
 
-  const handleDownload = (imageId: string) => {
-    setImages(prev => prev.map(img => 
-      img.id === imageId 
-        ? { ...img, downloads: img.downloads + 1 }
-        : img
-    ));
-  };
+  const handleDownload = async (imageId: string) => {
+    const image = images.find(img => img.id === imageId);
+    if (!image) return;
+    // Increment download count in UI
+    setImages(prev => prev.map(img => img.id === imageId ? { ...img, downloads: img.downloads + 1 } : img));
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setUploadData(prev => ({ ...prev, file }));
+    try {
+      const response = await fetch(image.imageUrl);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const safeName = image.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+      link.download = `${safeName || 'community-image'}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to download image', err);
     }
   };
 
-  const handleTagInput = (value: string) => {
-    const tags = value.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-    setUploadData(prev => ({ ...prev, tags }));
+  const handleFlip = (imageId: string) => {
+    setFlipped(prev => ({ ...prev, [imageId]: !prev[imageId] }));
   };
 
-  const handleUpload = async () => {
-    if (!uploadData.title || !uploadData.description || !uploadData.file) {
-      alert('Please fill in all required fields and select an image');
-      return;
-    }
-
-    setIsUploading(true);
-    
-    // Simulate upload process
-    setTimeout(() => {
-      const newImage: CommunityImage = {
-        id: Date.now().toString(),
-        title: uploadData.title,
-        description: uploadData.description,
-        imageUrl: URL.createObjectURL(uploadData.file!),
-        author: {
-          name: 'You',
-          avatar: '/api/placeholder/40/40',
-          verified: true
-        },
-        likes: 0,
-        downloads: 0,
-        views: 0,
-        tags: uploadData.tags,
-        createdAt: new Date().toISOString().split('T')[0],
-        isLiked: false,
-        category: uploadData.category
-      };
-
-      setImages(prev => [newImage, ...prev]);
-      setUploadData({
-        title: '',
-        description: '',
-        tags: [],
-        category: 'Art',
-        file: null
-      });
-      setShowUploadModal(false);
-      setIsUploading(false);
-      
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }, 2000);
-  };
-
-  const resetUploadForm = () => {
-    setUploadData({
-      title: '',
-      description: '',
-      tags: [],
-      category: 'Art',
-      file: null
-    });
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+  const handleCopyPrompt = async (imageId: string) => {
+    const image = images.find(img => img.id === imageId);
+    if (!image) return;
+    try {
+      await navigator.clipboard.writeText(image.prompt);
+      setCopied(prev => ({ ...prev, [imageId]: true }));
+      setTimeout(() => {
+        setCopied(prev => ({ ...prev, [imageId]: false }));
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to copy prompt', err);
     }
   };
 
@@ -288,83 +240,53 @@ export default function Community() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Community</h1>
-              {/* <p className="mt-2 text-gray-600">
-                Discover and share amazing AI-generated images with the community
-              </p> */}
-            </div>
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Share Image
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Filters and Controls */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             {/* Search */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative flex-1 max-w-xl">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search images, tags, or authors..."
+                placeholder="Search prompts, tags, or creators"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                className="block w-full pl-10 pr-3 py-2.5 border border-gray-200 rounded-full leading-5 bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {/* Category Filter */}
-              <div className="flex items-center gap-2">
+              <div className="group flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 shadow-sm hover:border-gray-300 transition-colors">
                 <Filter className="h-4 w-4 text-gray-400" />
+                <div className="relative">
                 <select
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                    className="appearance-none bg-transparent text-sm focus:outline-none pr-7 cursor-pointer"
                 >
                   {categories.map(category => (
                     <option key={category} value={category}>{category}</option>
                   ))}
                 </select>
+                  <ChevronDown className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform duration-200 group-focus-within:rotate-180 group-hover:text-gray-500" />
+                </div>
               </div>
 
               {/* Sort */}
+              <div className="group relative bg-gray-50 border border-gray-200 rounded-full px-3 py-1.5 shadow-sm hover:border-gray-300 transition-colors">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                  className="appearance-none bg-transparent text-sm focus:outline-none pr-7 cursor-pointer"
               >
                 {sortOptions.map(option => (
                   <option key={option} value={option}>{option}</option>
                 ))}
               </select>
-
-              {/* View Mode */}
-              <div className="flex border border-gray-300 rounded-md">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 ${viewMode === 'grid' ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  <Grid className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 ${viewMode === 'list' ? 'bg-purple-500 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  <List className="h-4 w-4" />
-                </button>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 transition-transform duration-200 group-focus-within:rotate-180 group-hover:text-gray-500" />
               </div>
             </div>
           </div>
@@ -372,197 +294,66 @@ export default function Community() {
       </div>
 
       {/* Images Grid/List */}
-      <div className="px-4 sm:px-6 lg:px-8 py-8">
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
-            {sortedImages.map((image) => (
-              <div key={image.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200">
-                <div className="relative group">
-                  <img
-                    src={image.imageUrl}
-                    alt={image.title}
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center">
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-2">
-                      <button
-                        onClick={() => handleLike(image.id)}
-                        className={`p-2 rounded-full ${
-                          image.isLiked ? 'bg-red-500 text-white' : 'bg-white text-gray-700'
-                        } hover:scale-110 transition-transform duration-200`}
-                      >
-                        <Heart className={`h-4 w-4 ${image.isLiked ? 'fill-current' : ''}`} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sortedImages.map((image) => (
+            <div key={image.id} className="group rounded-xl bg-white shadow hover:shadow-lg transition-shadow">
+              <div className="relative [perspective:1000px]">
+                <div className={`relative h-64 w-full transition-transform duration-500 [transform-style:preserve-3d] ${flipped[image.id] ? 'rotate-y-180' : ''}`}>
+                  {/* Front */}
+                  <div className="absolute inset-0 overflow-hidden [backface-visibility:hidden] rounded-xl">
+                    <img src={image.imageUrl} alt={image.title} className="w-full h-64 object-cover" />
+                    {/* <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pt-10 pb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <p className="text-white text-sm line-clamp-2">{image.description}</p>
+                    </div> */}
+                    <div className="absolute bottom-3 right-3 flex items-center gap-3 text-white/90">
+                      <button onClick={() => handleLike(image.id)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-black/40 hover:bg-black/50 cursor-pointer">
+                        <Heart className={`h-4 w-4 ${image.isLiked ? 'fill-white text-white' : ''}`} />
+                        <span className="text-xs">{image.likes}</span>
                       </button>
-                      <button className="p-2 rounded-full bg-white text-gray-700 hover:scale-110 transition-transform duration-200">
-                        <Share2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDownload(image.id)}
-                        className="p-2 rounded-full bg-white text-gray-700 hover:scale-110 transition-transform duration-200"
-                      >
+                      <button onClick={() => handleDownload(image.id)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-black/40 hover:bg-black/50 cursor-pointer">
                         <Download className="h-4 w-4" />
+                        <span className="text-xs">{image.downloads}</span>
+                      </button>
+                    </div>
+                    <div className="absolute top-3 left-3">
+                      <button onClick={() => handleFlip(image.id)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-black/40 hover:bg-black/50 text-white/90 cursor-pointer">
+                        <FlipHorizontal2 className="h-4 w-4" />
+                        <span className="text-xs">Prompt</span>
                       </button>
                     </div>
                   </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 mb-1 line-clamp-1">{image.title}</h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{image.description}</p>
-                  
-                  {/* Author */}
-                  <div className="flex items-center mb-3">
-                    <img
-                      src={image.author.avatar}
-                      alt={image.author.name}
-                      className="h-6 w-6 rounded-full mr-2"
-                    />
-                    <span className="text-sm text-gray-700 flex items-center">
-                      {image.author.name}
-                      {image.author.verified && (
-                        <span className="ml-1 text-blue-500">✓</span>
-                      )}
-                    </span>
-                  </div>
 
-                  {/* Stats */}
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <div className="flex items-center gap-4">
-                      <span className="flex items-center">
-                        <Heart className="h-3 w-3 mr-1" />
-                        {image.likes}
-                      </span>
-                      <span className="flex items-center">
-                        <Download className="h-3 w-3 mr-1" />
-                        {image.downloads}
-                      </span>
-                      <span className="flex items-center">
-                        <Eye className="h-3 w-3 mr-1" />
-                        {image.views}
-                      </span>
+                  {/* Back */}
+                  <div className="absolute inset-0 rotate-y-180 [backface-visibility:hidden] rounded-xl bg-gradient-to-br from-white to-gray-100 text-gray-900">
+                    <div className="absolute top-3 right-3">
+                      <button onClick={() => handleFlip(image.id)} className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-200/80 hover:bg-gray-300 text-gray-900 border border-gray-300 cursor-pointer">
+                        <FlipHorizontal2 className="h-4 w-4" />
+                        <span className="text-xs">Back</span>
+                      </button>
                     </div>
-                    <span className="flex items-center">
-                      <Calendar className="h-3 w-3 mr-1" />
-                      {new Date(image.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  {/* Tags */}
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {image.tags.slice(0, 3).map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
-                      >
-                        <Tag className="h-2 w-2 mr-1" />
-                        {tag}
-                      </span>
-                    ))}
-                    {image.tags.length > 3 && (
-                      <span className="text-xs text-gray-500">+{image.tags.length - 3} more</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sortedImages.map((image) => (
-              <div key={image.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-200">
-                <div className="flex">
-                  <div className="flex-shrink-0">
-                    <img
-                      src={image.imageUrl}
-                      alt={image.title}
-                      className="h-32 w-48 object-cover"
-                    />
-                  </div>
-                  <div className="flex-1 p-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 mb-1">{image.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3">{image.description}</p>
-                        
-                        {/* Author */}
-                        <div className="flex items-center mb-3">
-                          <img
-                            src={image.author.avatar}
-                            alt={image.author.name}
-                            className="h-6 w-6 rounded-full mr-2"
-                          />
-                          <span className="text-sm text-gray-700 flex items-center">
-                            {image.author.name}
-                            {image.author.verified && (
-                              <span className="ml-1 text-blue-500">✓</span>
-                            )}
-                          </span>
-                        </div>
-
-                        {/* Tags */}
-                        <div className="flex flex-wrap gap-1 mb-3">
-                          {image.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
-                            >
-                              <Tag className="h-2 w-2 mr-1" />
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
+                    <div className="h-full w-full p-4 flex flex-col">
+                      <div className="mb-3">
+                        <h3 className="text-sm font-medium text-gray-700">Prompt</h3>
                       </div>
-                      
-                      <div className="flex flex-col items-end gap-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleLike(image.id)}
-                            className={`p-2 rounded-full ${
-                              image.isLiked ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-700'
-                            } hover:scale-110 transition-transform duration-200`}
-                          >
-                            <Heart className={`h-4 w-4 ${image.isLiked ? 'fill-current' : ''}`} />
+                      <div className="relative flex-1 overflow-auto rounded-lg bg-white border border-gray-200 p-3 shadow-sm">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-800">
+                          {image.prompt}
+                        </p>
+                        <div className="absolute bottom-2 right-2">
+                          <button onClick={() => handleCopyPrompt(image.id)} className="flex items-center gap-1 px-2 py-1 rounded-md bg-gray-900 hover:bg-gray-800 text-white cursor-pointer">
+                            {copied[image.id] ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                            <span className="text-xs">{copied[image.id] ? 'Copied' : 'Copy'}</span>
                           </button>
-                          <button className="p-2 rounded-full bg-gray-100 text-gray-700 hover:scale-110 transition-transform duration-200">
-                            <Share2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDownload(image.id)}
-                            className="p-2 rounded-full bg-gray-100 text-gray-700 hover:scale-110 transition-transform duration-200"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                          <button className="p-2 rounded-full bg-gray-100 text-gray-700 hover:scale-110 transition-transform duration-200">
-                            <MoreVertical className="h-4 w-4" />
-                          </button>
-                        </div>
-                        
-                        {/* Stats */}
-                        <div className="flex items-center gap-4 text-sm text-gray-500">
-                          <span className="flex items-center">
-                            <Heart className="h-3 w-3 mr-1" />
-                            {image.likes}
-                          </span>
-                          <span className="flex items-center">
-                            <Download className="h-3 w-3 mr-1" />
-                            {image.downloads}
-                          </span>
-                          <span className="flex items-center">
-                            <Eye className="h-3 w-3 mr-1" />
-                            {image.views}
-                          </span>
-                          <span className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {new Date(image.createdAt).toLocaleDateString()}
-                          </span>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
 
         {sortedImages.length === 0 && (
           <div className="text-center py-12">
@@ -575,148 +366,7 @@ export default function Community() {
         )}
       </div>
 
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Share Your Image</h3>
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    resetUploadForm();
-                  }}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Upload Image *
-                  </label>
-                  <div 
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-purple-500 transition-colors cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {uploadData.file ? (
-                      <div>
-                        <img 
-                          src={URL.createObjectURL(uploadData.file)} 
-                          alt="Preview" 
-                          className="h-20 w-20 object-cover rounded mx-auto mb-2"
-                        />
-                        <p className="text-sm text-gray-600">{uploadData.file.name}</p>
-                      </div>
-                    ) : (
-                      <div>
-                        <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                        <p className="text-sm text-gray-600">Click to upload or drag and drop</p>
-                      </div>
-                    )}
-                    <input 
-                      ref={fileInputRef}
-                      type="file" 
-                      className="hidden" 
-                      accept="image/*" 
-                      onChange={handleFileSelect}
-                    />
-                  </div>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Title *
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadData.title}
-                    onChange={(e) => setUploadData(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                    placeholder="Enter image title"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description *
-                  </label>
-                  <textarea
-                    rows={3}
-                    value={uploadData.description}
-                    onChange={(e) => setUploadData(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                    placeholder="Describe your image"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadData.tags.join(', ')}
-                    onChange={(e) => handleTagInput(e.target.value)}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                    placeholder="Enter tags separated by commas"
-                  />
-                  {uploadData.tags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {uploadData.tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category
-                  </label>
-                  <select 
-                    value={uploadData.category}
-                    onChange={(e) => setUploadData(prev => ({ ...prev, category: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-                  >
-                    {categories.slice(1).map(category => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    resetUploadForm();
-                  }}
-                  disabled={isUploading}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleUpload}
-                  disabled={isUploading || !uploadData.title || !uploadData.description || !uploadData.file}
-                  className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploading ? 'Uploading...' : 'Share Image'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Upload removed per requirements */}
     </div>
   );
 }
