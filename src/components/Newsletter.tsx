@@ -1,10 +1,13 @@
 import { Mail, Send, Sparkles, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import { useSubscribeToNewsletterMutation } from '../services/api';
 import { validateNewsletterForm, sanitizeEmail, isRateLimited, setRateLimit } from '../utils/validation';
 import type { FormErrors } from '../utils/validation';
 import type { NewsletterState } from '../types';
 
 export default function Newsletter() {
+  const [subscribeToNewsletter, { isLoading: isSubscribing }] = useSubscribeToNewsletterMutation();
+  
   const [state, setState] = useState<NewsletterState>({
     email: '',
     isSubscribed: false,
@@ -42,29 +45,53 @@ export default function Newsletter() {
     setState(prev => ({ ...prev, isLoading: true }));
     
     try {
-      // Simulate API call (replace with actual API call)
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call the real newsletter subscription API
+      const response = await subscribeToNewsletter({
+        email: state.email,
+        preferences: {
+          frequency: 'weekly'
+        }
+      }).unwrap();
       
-      // Set rate limit
-      setRateLimit();
+      if (response.success) {
+        // Set rate limit
+        setRateLimit();
+        
+        setState(prev => ({ 
+          ...prev, 
+          isSubscribed: true, 
+          isLoading: false,
+          email: '' 
+        }));
+        
+        // Reset success state after 5 seconds
+        setTimeout(() => {
+          setState(prev => ({ ...prev, isSubscribed: false }));
+        }, 5000);
+      } else {
+        throw new Error(response.message || 'Failed to subscribe');
+      }
+      
+    } catch (error: any) {
+      let errorMessage = 'Something went wrong. Please try again.';
+      
+      if (error?.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Handle specific error cases
+      if (errorMessage.includes('already subscribed')) {
+        errorMessage = 'This email is already subscribed to our newsletter.';
+      } else if (errorMessage.includes('Invalid email')) {
+        errorMessage = 'Please enter a valid email address.';
+      }
       
       setState(prev => ({ 
         ...prev, 
-        isSubscribed: true, 
         isLoading: false,
-        email: '' 
-      }));
-      
-      // Reset success state after 5 seconds
-      setTimeout(() => {
-        setState(prev => ({ ...prev, isSubscribed: false }));
-      }, 5000);
-      
-    } catch {
-      setState(prev => ({ 
-        ...prev, 
-        isLoading: false,
-        error: 'Something went wrong. Please try again.' 
+        error: errorMessage 
       }));
     }
   };
@@ -121,11 +148,11 @@ export default function Newsletter() {
               </div>
               <button
                 type="submit"
-                disabled={state.isLoading || state.isSubscribed}
+                disabled={state.isLoading || isSubscribing || state.isSubscribed}
                 className="px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
                 aria-label="Subscribe to newsletter"
               >
-                {state.isLoading ? (
+                {(state.isLoading || isSubscribing) ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Subscribing...

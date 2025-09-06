@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArticleData, ArticleState, loadArticleState, saveArticleState, clearArticleState, getLastSaved } from '../utils/localStorage';
+import { loadArticleState, saveArticleState, clearArticleState, getLastSaved } from '../utils/localStorage';
+import type { ArticleData, ArticleState } from '../utils/localStorage';
 
 export const useArticleState = () => {
   const [state, setState] = useState<ArticleState>(() => loadArticleState());
@@ -7,7 +8,7 @@ export const useArticleState = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(() => getLastSaved());
 
   // Debounced save function
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [saveTimeout, setSaveTimeout] = useState<number | null>(null);
 
   const debouncedSave = useCallback((newState: ArticleState) => {
     if (saveTimeout) {

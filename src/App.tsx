@@ -9,7 +9,7 @@ import WriteArticle from './pages/dashboard/WriteArticle';
 import BlogTitles from './pages/dashboard/BlogTitles';
 import GenerateImages from './pages/dashboard/GenerateImages';
 import RemoveBackground from './pages/dashboard/RemoveBackground';
-import RemoveObject from './pages/dashboard/RemoveObject';
+// import RemoveObject from './pages/dashboard/RemoveObject'; // Coming soon
 import ReviewResume from './pages/dashboard/ReviewResume';
 import { useAuth } from '@clerk/clerk-react';
 
@@ -33,7 +33,7 @@ export default function App() {
           <Route path="blog-titles" element={<BlogTitles />} />
           <Route path="generate-images" element={<GenerateImages />} />
           <Route path="remove-background" element={<RemoveBackground />} />
-          <Route path="remove-object" element={<RemoveObject />} />
+          {/* <Route path="remove-object" element={<RemoveObject />} /> Coming soon */}
           <Route path="review-resume" element={<ReviewResume />} />
         </Route>
       </Routes>

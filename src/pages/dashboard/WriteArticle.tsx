@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { useGenerateArticleMutation, useGetUserCreationsQuery } from '../../services/api';
 import { parseArticleContent, structuredArticleToHTML, calculateSEOScore, extractSEOKeywords } from '../../utils/articleFormatter';
 import Toaster, { useToaster } from '../../components/Toaster';
@@ -65,7 +66,9 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 };
 
 export default function WriteArticle() {
+  const { user, isLoaded } = useUser();
   const toaster = useToaster();
+  const [isPremium, setIsPremium] = useState(false);
   
   const [articleData, setArticleData] = useState<ArticleData>(() => 
     loadFromStorage(STORAGE_KEYS.ARTICLE_DATA, {
@@ -126,6 +129,19 @@ export default function WriteArticle() {
       }
     }, 2000); // Save after 2 seconds of inactivity
   };
+
+  // Detect premium plan
+  useEffect(() => {
+    if (!isLoaded) return;
+    type Meta = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
+    const pub = user?.publicMetadata as Meta;
+    const unsafe = user?.unsafeMetadata as Meta;
+    const norm = (v: unknown) => (v == null ? '' : String(v).toLowerCase().trim());
+    const plan = norm(pub?.plan ?? unsafe?.plan ?? pub?.tier ?? unsafe?.tier ?? pub?.currentPlan ?? unsafe?.currentPlan);
+    const flag = norm(pub?.isPremium ?? unsafe?.isPremium);
+    const premium = ['premium', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
+    setIsPremium(premium);
+  }, [isLoaded, user]);
 
   // Save article data to localStorage whenever it changes (with debouncing)
   useEffect(() => {
@@ -342,7 +358,11 @@ export default function WriteArticle() {
       if (message.includes('OPENAI_API_ERROR')) {
         message = 'AI service is currently unavailable. Please check your API configuration or try again later.';
       } else if (message.includes('Free usage limit exceeded')) {
-        message = 'You have reached your free usage limit. Please upgrade to premium to continue generating articles.';
+        if (isPremium) {
+          message = 'There seems to be an issue with your premium plan. Please contact support or try again later.';
+        } else {
+          message = 'You have reached your free usage limit. Please upgrade to premium to continue generating articles.';
+        }
       } else if (message.includes('Unauthorized')) {
         message = 'Please log in again to continue generating articles.';
       } else if (message.includes('Failed to generate article')) {
@@ -638,21 +658,9 @@ export default function WriteArticle() {
   return (
     <>
       <Toaster toasts={toaster.toasts} onRemove={toaster.removeToast} />
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-          }
-          .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-          }
-        `
-      }} />
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+      
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Write Article</h1>
@@ -727,228 +735,227 @@ export default function WriteArticle() {
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex flex-col h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)]">
-        {/* Main Editor Area */}
-        <div className="flex-1 flex flex-col w-full">
-          {/* Article Title */}
-          <div className="bg-white border-b border-gray-200 p-3 sm:p-4 lg:p-6">
-                  <input
-                    type="text"
-              value={articleData.title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="w-full text-2xl sm:text-3xl font-bold text-gray-900 placeholder-gray-500 border-none outline-none resize-none"
-                    placeholder="Enter your article title..."
-                  />
-            <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500">
-              <span>{wordCount} words</span>
-              <span className="hidden sm:inline">•</span>
-              <span>{readingTime} min read</span>
-              <span className="hidden sm:inline">•</span>
-              <span className="flex items-center">
-                <Target className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
-                SEO: {seoScore}/100
-              </span>
-              {seoKeywords.length > 0 && (
-                <>
+        <div className="flex flex-col h-[calc(100vh-80px)] sm:h-[calc(100vh-100px)]">
+          {/* Main Editor Area */}
+          <div className="flex-1 flex flex-col w-full">
+            {/* Article Title */}
+            <div className="bg-white border-b border-gray-200 p-3 sm:p-4 lg:p-6">
+                      <input
+                        type="text"
+                  value={articleData.title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  className="w-full text-2xl sm:text-3xl font-bold text-gray-900 placeholder-gray-500 border-none outline-none resize-none"
+                        placeholder="Enter your article title..."
+                      />
+                <div className="mt-2 flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500">
+                  <span>{wordCount} words</span>
+                  <span className="hidden sm:inline">•</span>
+                  <span>{readingTime} min read</span>
                   <span className="hidden sm:inline">•</span>
                   <span className="flex items-center">
-                    <span className="hidden sm:inline">Keywords: </span>
-                    <span className="sm:hidden">KW: </span>
-                    {seoKeywords.slice(0, 2).join(', ')}
-                    {seoKeywords.length > 2 && ` +${seoKeywords.length - 2}`}
+                    <Target className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                    SEO: {seoScore}/100
                   </span>
-                </>
+                  {seoKeywords.length > 0 && (
+                    <>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="flex items-center">
+                        <span className="hidden sm:inline">Keywords: </span>
+                        <span className="sm:hidden">KW: </span>
+                        {seoKeywords.slice(0, 2).join(', ')}
+                        {seoKeywords.length > 2 && ` +${seoKeywords.length - 2}`}
+                      </span>
+                    </>
+                  )}
+                </div>
+            </div>
+
+            {/* Editor Toolbar */}
+            <div className="bg-white border-b border-gray-200 p-2">
+              <div className="flex items-center space-x-1 overflow-x-auto scrollbar-hide">
+                <button
+                  onClick={() => handleFormatText('bold')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Bold (B)"
+                >
+                  <Bold className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleFormatText('italic')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Italic (I)"
+                >
+                  <Italic className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleFormatText('underline')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Underline (U)"
+                >
+                  <Underline className="h-4 w-4" />
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                
+                <button
+                  onClick={() => handleListFormat('ul')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Bullet List"
+                >
+                  <List className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleListFormat('ol')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Numbered List"
+                >
+                  <ListOrdered className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleFormatText('blockquote')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Blockquote"
+                >
+                  <Quote className="h-4 w-4" />
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                
+                <button
+                  onClick={() => toggleHeading(1)}
+                  className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
+                  title="Heading 1"
+                >
+                  H1
+                </button>
+                <button
+                  onClick={() => toggleHeading(2)}
+                  className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
+                  title="Heading 2"
+                >
+                  H2
+                </button>
+                <button
+                  onClick={() => toggleHeading(3)}
+                  className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
+                  title="Heading 3"
+                >
+                  H3
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                
+                <button
+                  onClick={handleInsertLink}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Insert Link"
+                >
+                  <Link className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleInsertImage}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Insert Image"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                
+                <button
+                  onClick={() => handleTextAlign('left')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Align Left"
+                >
+                  <AlignLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleTextAlign('center')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Align Center"
+                >
+                  <AlignCenter className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleTextAlign('right')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Align Right"
+                >
+                  <AlignRight className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleTextAlign('justify')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Justify"
+                >
+                  <AlignJustify className="h-4 w-4" />
+                </button>
+                
+                <div className="w-px h-6 bg-gray-300 mx-2"></div>
+                
+                <button
+                  onClick={() => document.execCommand('undo')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Undo"
+                >
+                  <Undo className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => document.execCommand('redo')}
+                  className="p-2 rounded hover:bg-gray-100 transition-colors"
+                  title="Redo"
+                >
+                  <Redo className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Rich Text Editor */}
+            <div className="flex-1 bg-white">
+              {(isGenerating || isGeneratingArticle) ? (
+                <div className="p-3 sm:p-4 lg:p-6 animate-pulse space-y-3">
+                  <div className="h-6 sm:h-8 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded w-5/6"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded w-2/3"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded w-4/6"></div>
+                  <div className="h-3 sm:h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-48 sm:h-64 bg-gray-200 rounded"></div>
+                </div>
+              ) : (
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  dir="ltr"
+                  className="w-full h-full p-3 sm:p-4 lg:p-6 text-gray-900 focus:outline-none resize-none overflow-y-auto cursor-text text-sm sm:text-base"
+                  style={{ minHeight: '300px', direction: 'ltr', textAlign: 'left' }}
+                  onInput={(e) => {
+                    const content = e.currentTarget.innerHTML;
+                    handleContentChange(content);
+                  }}
+                  suppressContentEditableWarning={true}
+                  onFocus={() => {
+                    // Simple focus handling
+                    editorRef.current?.focus();
+                  }}
+                  onKeyDown={(e) => {
+                    // Handle special key combinations
+                    if (e.key === 'Enter' && e.shiftKey) {
+                      e.preventDefault();
+                      document.execCommand('insertHTML', false, '<br>');
+                    }
+                  }}
+                  data-placeholder="Start writing your article here... Use the toolbar above to format your text."
+                      />
               )}
             </div>
-          </div>
 
-          {/* Editor Toolbar */}
-          <div className="bg-white border-b border-gray-200 p-2">
-            <div className="flex items-center space-x-1 overflow-x-auto scrollbar-hide">
-              <button
-                onClick={() => handleFormatText('bold')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Bold (B)"
-              >
-                <Bold className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleFormatText('italic')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Italic (I)"
-              >
-                <Italic className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleFormatText('underline')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Underline (U)"
-              >
-                <Underline className="h-4 w-4" />
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              
-              <button
-                onClick={() => handleListFormat('ul')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Bullet List"
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleListFormat('ol')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Numbered List"
-              >
-                <ListOrdered className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleFormatText('blockquote')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Blockquote"
-              >
-                <Quote className="h-4 w-4" />
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              
-              <button
-                onClick={() => toggleHeading(1)}
-                className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
-                title="Heading 1"
-              >
-                H1
-              </button>
-              <button
-                onClick={() => toggleHeading(2)}
-                className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
-                title="Heading 2"
-              >
-                H2
-              </button>
-              <button
-                onClick={() => toggleHeading(3)}
-                className="px-2 py-1 rounded hover:bg-gray-100 text-xs font-semibold text-gray-700"
-                title="Heading 3"
-              >
-                H3
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              
-              <button
-                onClick={handleInsertLink}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Insert Link"
-              >
-                <Link className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleInsertImage}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Insert Image"
-              >
-                <ImageIcon className="h-4 w-4" />
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              
-              <button
-                onClick={() => handleTextAlign('left')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Align Left"
-              >
-                <AlignLeft className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleTextAlign('center')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Align Center"
-              >
-                <AlignCenter className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleTextAlign('right')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Align Right"
-              >
-                <AlignRight className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => handleTextAlign('justify')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Justify"
-              >
-                <AlignJustify className="h-4 w-4" />
-              </button>
-              
-              <div className="w-px h-6 bg-gray-300 mx-2"></div>
-              
-              <button
-                onClick={() => document.execCommand('undo')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Undo"
-              >
-                <Undo className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => document.execCommand('redo')}
-                className="p-2 rounded hover:bg-gray-100 transition-colors"
-                title="Redo"
-              >
-                <Redo className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Rich Text Editor */}
-          <div className="flex-1 bg-white">
-            {(isGenerating || isGeneratingArticle) ? (
-              <div className="p-3 sm:p-4 lg:p-6 animate-pulse space-y-3">
-                <div className="h-6 sm:h-8 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded w-5/6"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded w-2/3"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded w-4/6"></div>
-                <div className="h-3 sm:h-4 bg-gray-200 rounded w-1/2"></div>
-                <div className="h-48 sm:h-64 bg-gray-200 rounded"></div>
-              </div>
-            ) : (
-              <div
-                ref={editorRef}
-                contentEditable
-                dir="ltr"
-                className="w-full h-full p-3 sm:p-4 lg:p-6 text-gray-900 focus:outline-none resize-none overflow-y-auto cursor-text text-sm sm:text-base"
-                style={{ minHeight: '300px', direction: 'ltr', textAlign: 'left' }}
-                onInput={(e) => {
-                  const content = e.currentTarget.innerHTML;
-                  handleContentChange(content);
-                }}
-                suppressContentEditableWarning={true}
-                onFocus={() => {
-                  // Simple focus handling
-                  editorRef.current?.focus();
-                }}
-                onKeyDown={(e) => {
-                  // Handle special key combinations
-                  if (e.key === 'Enter' && e.shiftKey) {
-                    e.preventDefault();
-                    document.execCommand('insertHTML', false, '<br>');
-                  }
-                }}
-                data-placeholder="Start writing your article here... Use the toolbar above to format your text."
-                    />
-            )}
-          </div>
-
-          
+            
+                      </div>
                     </div>
                   </div>
-                </div>
 
     {isAIPromptOpen && (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">

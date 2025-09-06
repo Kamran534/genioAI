@@ -10,25 +10,29 @@ import {
   Menu,
   X,
   Users,
-  Crown
+  Crown,
+  Clock
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import NotLoggedIn from './LoginRequired';
 
 export default function DashboardLayout() {
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showComingSoon, setShowComingSoon] = useState(false);
+  const [showArticleComingSoon, setShowArticleComingSoon] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, gradient: 'from-blue-500 to-cyan-500', premium: false },
-    { name: 'Write Article', href: '/dashboard/write-article', icon: PenTool, gradient: 'from-purple-500 to-pink-500', premium: false },
+    { name: 'Write Article', href: '#', icon: PenTool, gradient: 'from-purple-500 to-pink-500', premium: false, comingSoon: true },
     { name: 'Blog Titles', href: '/dashboard/blog-titles', icon: Hash, gradient: 'from-green-500 to-emerald-500', premium: false },
     { name: 'Generate Images', href: '/dashboard/generate-images', icon: ImageIcon, gradient: 'from-orange-500 to-red-500', premium: true },
     { name: 'Remove Background', href: '/dashboard/remove-background', icon: Layers, gradient: 'from-indigo-500 to-purple-500', premium: true },
-    { name: 'Remove Object', href: '/dashboard/remove-object', icon: Scissors, gradient: 'from-teal-500 to-blue-500', premium: true },
+    { name: 'Remove Object', href: '#', icon: Scissors, gradient: 'from-teal-500 to-blue-500', premium: true, comingSoon: true },
     { name: 'Review Resume', href: '/dashboard/review-resume', icon: FileText, gradient: 'from-rose-500 to-pink-500', premium: true },
     { name: 'Community', href: '/dashboard/community', icon: Users, gradient: 'from-violet-500 to-purple-500', premium: false },
   ];
@@ -50,6 +54,19 @@ export default function DashboardLayout() {
     });
     return currentNav || { name: 'Dashboard', icon: Home, premium: false };
   };
+
+  // Detect premium plan
+  useEffect(() => {
+    if (!isLoaded) return;
+    type Meta = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
+    const pub = user?.publicMetadata as Meta;
+    const unsafe = user?.unsafeMetadata as Meta;
+    const norm = (v: unknown) => (v == null ? '' : String(v).toLowerCase().trim());
+    const plan = norm(pub?.plan ?? unsafe?.plan ?? pub?.tier ?? unsafe?.tier ?? pub?.currentPlan ?? unsafe?.currentPlan);
+    const flag = norm(pub?.isPremium ?? unsafe?.isPremium);
+    const premium = ['premium', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
+    setIsPremium(premium);
+  }, [isLoaded, user]);
 
   const getGradientClasses = (gradient: string) => {
     const gradientMap: { [key: string]: string } = {
@@ -93,6 +110,37 @@ export default function DashboardLayout() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const isComingSoon = item.comingSoon;
+              
+              if (isComingSoon) {
+                return (
+                  <button
+                    key={item.name}
+                    onClick={() => {
+                      if (item.name === 'Write Article') {
+                        setShowArticleComingSoon(true);
+                      } else {
+                        setShowComingSoon(true);
+                      }
+                      setSidebarOpen(false);
+                    }}
+                    className={`text-gray-600 hover:bg-gradient-to-r ${getGradientClasses(item.gradient)} hover:text-white hover:shadow-lg group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer`}
+                  >
+                    <div className="flex items-center w-full">
+                      <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      <div className="flex items-center ml-auto flex-shrink-0">
+                        {item.name === 'Write Article' ? (
+                          <Clock className="h-4 w-4 text-orange-500" />
+                        ) : (
+                          <Crown className="h-4 w-4 text-yellow-500" fill="currentColor" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              }
+              
               return (
                 <Link
                   key={item.name}
@@ -134,6 +182,18 @@ export default function DashboardLayout() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-700">{user?.fullName || 'User'}</p>
                 <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p>
+                <div className="flex items-center mt-1">
+                  {isPremium ? (
+                    <div className="flex items-center px-2 py-0.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full text-xs font-medium">
+                      <Crown className="h-3 w-3 mr-1" />
+                      <span>Premium</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                      <span>Free Plan</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -156,6 +216,36 @@ export default function DashboardLayout() {
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
+              const isComingSoon = item.comingSoon;
+              
+              if (isComingSoon) {
+                return (
+                  <button
+                    key={item.name}
+                    onClick={() => {
+                      if (item.name === 'Write Article') {
+                        setShowArticleComingSoon(true);
+                      } else {
+                        setShowComingSoon(true);
+                      }
+                    }}
+                    className={`text-gray-600 w-full hover:bg-gradient-to-r ${getGradientClasses(item.gradient)} hover:text-white hover:shadow-lg group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 cursor-pointer`}
+                  >
+                    <div className="flex items-center w-full">
+                      <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
+                      <span className="flex-1 text-left">{item.name}</span>
+                      <div className="flex items-center ml-auto flex-shrink-0">
+                        {item.name === 'Write Article' ? (
+                          <Clock className="h-4 w-4 text-orange-500" />
+                        ) : (
+                          <Crown className="h-4 w-4 text-yellow-500" fill="currentColor" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              }
+              
               return (
                 <Link
                   key={item.name}
@@ -196,7 +286,19 @@ export default function DashboardLayout() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-700">{user?.fullName || 'User'}</p>
-                  <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p>
+                  {/* <p className="text-xs text-gray-500">{user?.primaryEmailAddress?.emailAddress}</p> */}
+                  <div className="flex items-center mt-1">
+                    {isPremium ? (
+                      <div className="flex items-center text-gray-700 text-xs font-medium">
+                        <Crown className="h-3 w-3 mr-1" />
+                        <span>Premium Plan</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center text-gray-700 text-xs font-medium">
+                        <span>Free Plan</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -274,6 +376,76 @@ export default function DashboardLayout() {
           </div>
         </main>
       </div>
+
+      {/* Coming Soon Modal */}
+      {showComingSoon && (
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl max-w-md w-full border border-gray-200 shadow-2xl overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 mb-4">
+                <Clock className="h-6 w-6 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Coming Soon!</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                The Object Removal feature is currently under development and will be available soon. 
+                Stay tuned for updates!
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setShowComingSoon(false)}
+                  className="px-4 py-2 text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 transition-colors cursor-pointer"
+                >
+                  Got it
+                </button>
+                <button
+                  onClick={() => {
+                    setShowComingSoon(false);
+                    navigate('/dashboard/remove-background');
+                  }}
+                  className="px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Try Background Removal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Write Article Coming Soon Modal */}
+      {showArticleComingSoon && (
+        <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl max-w-md w-full border border-gray-200 shadow-2xl overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 mb-4">
+                <Clock className="h-6 w-6 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Coming Soon!</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                The Article Generation feature is currently under development and will be available soon. 
+                Stay tuned for updates!
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => setShowArticleComingSoon(false)}
+                  className="px-4 py-2 text-sm font-medium rounded-md text-white bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 transition-colors cursor-pointer"
+                >
+                  Got it
+                </button>
+                <button
+                  onClick={() => {
+                    setShowArticleComingSoon(false);
+                    navigate('/dashboard/blog-titles');
+                  }}
+                  className="px-4 py-2 text-sm font-medium rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Try Blog Titles
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </Protect>
   );

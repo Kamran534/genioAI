@@ -17,7 +17,17 @@ export default function Hero() {
     <section className="relative overflow-hidden" role="banner" aria-labelledby="hero-heading">
       <Header />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_50%_0%,rgba(99,102,241,0.15),rgba(255,255,255,0)),radial-gradient(45%_45%_at_80%_20%,rgba(236,72,153,0.14),rgba(255,255,255,0))]" />
-      <div className="relative mx-auto max-w-5xl px-3 sm:px-4 lg:px-8 py-12 sm:py-16 lg:py-20 text-center mt-6 sm:mt-8 lg:mt-2">
+      <div className="relative mx-auto max-w-5xl px-3 sm:px-4 lg:px-8 py-12 sm:py-14 lg:py-14 text-center mt-6 sm:mt-8 lg:mt-2">
+        {/* Beta Version Capsule */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/50 rounded-full shadow-sm mb-2">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2 h-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-indigo-700">Beta Version</span>
+          </div>
+          <div className="w-px h-4 bg-indigo-200"></div>
+          <span className="text-xs text-indigo-600">Early Access</span>
+        </div>
+
         <h1 id="hero-heading" className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-semibold tracking-tight leading-tight">
           Unleash your best work
           <br className="hidden sm:block" />

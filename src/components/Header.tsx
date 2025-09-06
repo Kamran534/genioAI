@@ -19,6 +19,9 @@ export default function Header() {
           >
             <img src="/genio_logo.png" alt="GenioAI" className="h-6 w-6 sm:h-7 sm:w-7 rounded" />
             <span className="font-semibold tracking-tight text-sm sm:text-base">GenioAI</span>
+            <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-full shadow-sm">
+              Beta
+            </span>
           </button>
 
           {/* Desktop Nav */}

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Hash, Copy, Loader2, Save, X, Eye, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Hash, Copy, Loader2, Save, X, RefreshCw } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 import { useGenerateBlogTitlesMutation, useGetUserCreationsQuery } from '../../services/api';
 import Toaster, { useToaster } from '../../components/Toaster';
 
@@ -38,16 +39,22 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 };
 
 export default function BlogTitles() {
+  const { user, isLoaded } = useUser();
   const toaster = useToaster();
+  const [isPremium, setIsPremium] = useState(false);
   
-  const [blogTitleData, setBlogTitleData] = useState<BlogTitleData>(() => 
-    loadFromStorage(STORAGE_KEYS.BLOG_TITLE_DATA, {
+  const [blogTitleData, setBlogTitleData] = useState<BlogTitleData>(() => {
+    const loaded = loadFromStorage(STORAGE_KEYS.BLOG_TITLE_DATA, {
       keyword: '',
       category: 'General',
       generatedTitles: [],
       lastGenerated: null
-    })
-  );
+    });
+    console.log('Loaded from storage:', loaded);
+    console.log('Generated titles from storage:', loaded.generatedTitles);
+    return loaded;
+  });
+
   
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -79,6 +86,39 @@ export default function BlogTitles() {
       }
     }, 2000);
   };
+
+  // Detect premium plan
+  useEffect(() => {
+    if (!isLoaded) return;
+    type Meta = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
+    const pub = user?.publicMetadata as Meta;
+    const unsafe = user?.unsafeMetadata as Meta;
+    const norm = (v: unknown) => (v == null ? '' : String(v).toLowerCase().trim());
+    const plan = norm(pub?.plan ?? unsafe?.plan ?? pub?.tier ?? unsafe?.tier ?? pub?.currentPlan ?? unsafe?.currentPlan);
+    const flag = norm(pub?.isPremium ?? unsafe?.isPremium);
+    const premium = ['premium', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
+    setIsPremium(premium);
+  }, [isLoaded, user]);
+
+  // Clean up corrupted data on mount
+  useEffect(() => {
+    if (blogTitleData.generatedTitles.length > 0) {
+      const hasCorruptedData = blogTitleData.generatedTitles.some(title => 
+        typeof title === 'string' && title.startsWith('[') && title.endsWith(']')
+      );
+      
+      if (hasCorruptedData) {
+        console.log('Found corrupted data, clearing...');
+        setBlogTitleData(prev => ({
+          ...prev,
+          generatedTitles: [],
+          lastGenerated: null
+        }));
+        // Clear from localStorage
+        localStorage.removeItem(STORAGE_KEYS.BLOG_TITLE_DATA);
+      }
+    }
+  }, []);
 
   // Auto-save functionality
   useEffect(() => {
@@ -113,9 +153,41 @@ export default function BlogTitles() {
       }).unwrap();
       
       if (response.success && response.titles) {
+        // Use the titles from the response
+        let titles: any = response.titles;
+        
+        console.log('API Response titles:', titles);
+        console.log('Titles type:', typeof titles);
+        console.log('Is array:', Array.isArray(titles));
+        
+        // Handle case where titles might be a single string containing an array
+        if (typeof titles === 'string' && (titles as string).startsWith('[') && (titles as string).endsWith(']')) {
+          try {
+            const parsed = JSON.parse(titles);
+            if (Array.isArray(parsed)) {
+              titles = parsed;
+              console.log('Parsed titles from string:', titles);
+            }
+          } catch (error) {
+            console.error('Failed to parse titles string:', error);
+          }
+        }
+        
+        // Ensure titles is an array
+        if (!Array.isArray(titles)) {
+          console.error('Titles is not an array:', titles);
+          throw new Error('Invalid response format from server');
+        }
+        
+        if (titles.length === 0) {
+          throw new Error('No titles were generated');
+        }
+        
+        console.log('Final titles to store:', titles);
+        
         setBlogTitleData(prev => ({
           ...prev,
-          generatedTitles: response.titles,
+          generatedTitles: titles,
           lastGenerated: new Date()
         }));
         
@@ -123,7 +195,7 @@ export default function BlogTitles() {
         refetchCreations();
         
         toaster.removeToast(loadingToastId);
-        toaster.showSuccess('Titles Generated!', `Successfully created ${response.titles.length} blog titles`);
+        toaster.showSuccess('Titles Generated!', `Successfully created ${titles.length} blog titles`);
       } else {
         throw new Error(response.message || 'Failed to generate titles');
       }
@@ -141,7 +213,11 @@ export default function BlogTitles() {
       
       // Provide more helpful error messages
       if (message.includes('Free usage limit exceeded')) {
+        if (isPremium) {
+          message = 'There seems to be an issue with your premium plan. Please contact support or try again later.';
+        } else {
         message = 'You have reached your free usage limit. Please upgrade to premium to continue generating blog titles.';
+        }
       } else if (message.includes('Unauthorized')) {
         message = 'Please log in again to continue generating blog titles.';
       } else if (message.includes('Failed to generate')) {
@@ -231,7 +307,7 @@ export default function BlogTitles() {
       }} />
       
       {/* Header with Status and Actions */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 mb-6">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 mb-6 rounded-xl">
         <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
@@ -397,18 +473,50 @@ export default function BlogTitles() {
             ) : (
               <div className="flex-1 overflow-y-auto scrollbar-hide">
                 <div className="space-y-2 sm:space-y-3">
-                  {blogTitleData.generatedTitles.map((title, index) => (
+                  {blogTitleData.generatedTitles.map((title, index) => {
+                    console.log('Rendering title:', title, 'Type:', typeof title, 'Index:', index);
+                    
+                    // Handle case where title might be a string representation of an array
+                    let displayTitle: string = '';
+                    if (typeof title === 'string' && (title as string).startsWith('[') && (title as string).endsWith(']')) {
+                      // If it's a string that looks like an array, try to parse it
+                      try {
+                        const parsed = JSON.parse(title);
+                        if (Array.isArray(parsed)) {
+                          // If it's an array, use the first element or join them
+                          displayTitle = String(parsed[0] || title);
+                        } else {
+                          displayTitle = title;
+                        }
+                      } catch {
+                        displayTitle = title;
+                      }
+                    } else {
+                      // Normal handling
+                      if (typeof title === 'string') {
+                        displayTitle = title;
+                      } else if (typeof title === 'object' && title && 'title' in title) {
+                        displayTitle = String((title as any).title);
+                      } else {
+                        displayTitle = String(title);
+                      }
+                    }
+                    
+                    console.log('Display title:', displayTitle);
+                    
+                    return (
                     <div key={index} className="group flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300 transition-all duration-200">
-                      <span className="text-sm sm:text-base text-gray-900 flex-1 pr-2 sm:pr-3 leading-relaxed">{title}</span>
+                        <span className="text-sm sm:text-base text-gray-900 flex-1 pr-2 sm:pr-3 leading-relaxed">{displayTitle}</span>
                       <button
-                        onClick={() => copyToClipboard(title)}
+                          onClick={() => copyToClipboard(displayTitle)}
                         className="flex-shrink-0 p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all duration-200 group-hover:scale-105"
                         title="Copy to clipboard"
                       >
                         <Copy className="h-4 w-4 sm:h-5 sm:w-5" />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -1,12 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { Image as ImageIcon, Download, Trash2, Eye, Sparkles, Share2, Globe, X, Save, Loader2, Heart, RefreshCw } from 'lucide-react';
+import { Image as ImageIcon, Download, Trash2, Eye, Sparkles, Globe, X, Save, Loader2, Heart, RefreshCw, Copy, Share } from 'lucide-react';
 import { 
   useGenerateAiImageMutation, 
   useGetUserCreationsQuery, 
   usePublishImageMutation,
   useLikeImageMutation,
-  useGetCommunityImagesQuery 
+  useGetLikedImagesQuery
 } from '../../services/api';
 import Toaster, { useToaster } from '../../components/Toaster';
 
@@ -21,6 +21,7 @@ interface ImageGenerationData {
     style: string;
     aspect_ratio: string;
     is_community_published: boolean;
+    is_liked: boolean;
     created_at: string;
   }>;
   lastGenerated: Date | null;
@@ -74,11 +75,12 @@ export default function GenerateImages() {
     return saved ? new Date(saved) : null;
   });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
+  const [previewPrompt, setPreviewPrompt] = useState<string>('');
+  const [previewImageData, setPreviewImageData] = useState<any>(null);
   const [isPremium, setIsPremium] = useState(false);
   const [freeLeft, setFreeLeft] = useState<number>(5);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [myLikedImages, setMyLikedImages] = useState<any[]>([]);
 
   // Debounced save function
   const saveTimeoutRef = useRef<number | null>(null);
@@ -122,12 +124,36 @@ export default function GenerateImages() {
   const [publishImage] = usePublishImageMutation();
   const [likeImage] = useLikeImageMutation();
   const { data: userCreations, refetch: refetchCreations } = useGetUserCreationsQuery();
-  const { data: communityImages, refetch: refetchCommunity } = useGetCommunityImagesQuery({
-    page: 1,
-    limit: 20,
-    sortBy: 'created_at',
-    sortOrder: 'desc'
-  });
+  const { data: likedImagesData, refetch: refetchLikedImages, isLoading: isLoadingLikedImages, error: likedImagesError } = useGetLikedImagesQuery();
+
+
+  // Fetch user's liked images from dedicated API
+  useEffect(() => {
+    if (likedImagesData?.data?.images) {
+      setMyLikedImages(likedImagesData.data.images);
+      console.log('My liked images loaded from API:', likedImagesData.data.images.length, likedImagesData.data.images);
+    } else if (likedImagesError) {
+      console.error('Error loading liked images:', likedImagesError);
+      setMyLikedImages([]);
+    }
+  }, [likedImagesData, likedImagesError]);
+
+  // Refetch liked images when plan status changes or component mounts
+  useEffect(() => {
+    if (isLoaded && user) {
+      console.log('Plan status changed, refetching liked images...', { isPremium, freeLeft });
+      refetchLikedImages();
+    }
+  }, [isLoaded, user, isPremium, refetchLikedImages]);
+
+  // Initial load of liked images when component mounts
+  useEffect(() => {
+    if (isLoaded && user) {
+      console.log('Component mounted, fetching liked images...');
+      refetchLikedImages();
+    }
+  }, [isLoaded, user, refetchLikedImages]);
+
 
   // Premium plan detection
   useEffect(() => {
@@ -205,9 +231,12 @@ export default function GenerateImages() {
           prompt: response.data.prompt,
           style: response.data.style,
           aspect_ratio: response.data.aspect_ratio,
-          is_community_published: response.data.is_community_published,
+          is_community_published: response.data.is_community_published || false,
+          is_liked: false, // New images start as not liked
           created_at: new Date().toISOString()
         };
+        
+        console.log('New image created with ID:', newImage.image_id);
         
         console.log('New image object:', newImage);
         
@@ -270,11 +299,13 @@ export default function GenerateImages() {
     }
   };
 
-  const handlePreviewImage = (imageUrl: string) => {
+  const handlePreviewImage = (imageUrl: string, prompt?: string, imageData?: any) => {
     setPreviewImage(imageUrl);
+    setPreviewPrompt(prompt || '');
+    setPreviewImageData(imageData || null);
   };
 
-  const handleDownloadImage = async (imageUrl: string) => {
+  const handleDownloadImage= async (imageUrl: string) => {
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
@@ -304,10 +335,6 @@ export default function GenerateImages() {
     toaster.showInfo('Image Deleted', 'Image has been removed from your collection');
   };
 
-  const handleShareImage = (imageUrl: string) => {
-    setShareImageUrl(imageUrl);
-    setShowShareModal(true);
-  };
 
   const handlePublicToCommunity = async (imageId: string) => {
     try {
@@ -326,8 +353,8 @@ export default function GenerateImages() {
           )
         }));
         
-        // Refresh community images
-        refetchCommunity();
+        // Refresh user creations
+        refetchCreations();
         
         toaster.showSuccess('Published!', 'Image has been shared to the community');
       }
@@ -337,17 +364,42 @@ export default function GenerateImages() {
     }
   };
 
+
   const handleLikeImage = async (imageId: string) => {
     try {
+      console.log('Attempting to like image:', imageId);
       const response = await likeImage({ imageId }).unwrap();
+      console.log('Like response:', response);
+      
       if (response.success) {
         toaster.showSuccess('Liked!', response.data.is_liked ? 'Image liked' : 'Image unliked');
-        // Refresh community images to update like count
-        refetchCommunity();
+        
+        // Update local state for generated images
+        setImageData(prev => ({
+          ...prev,
+          generatedImages: prev.generatedImages.map(img => 
+            img.image_id === imageId 
+              ? { ...img, is_liked: response.data.is_liked }
+              : img
+          )
+        }));
+        
+        // Refresh liked images to get updated like status
+        refetchLikedImages();
       }
     } catch (error: any) {
       console.error('Failed to like image:', error);
-      toaster.showError('Like Failed', 'Could not like/unlike image');
+      console.error('Error details:', error.data || error.message);
+      
+      // Show more specific error message
+      let errorMessage = 'Could not like/unlike image';
+      if (error.data?.message) {
+        errorMessage = error.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toaster.showError('Like Failed', errorMessage);
     }
   };
 
@@ -432,14 +484,32 @@ export default function GenerateImages() {
       }} />
       
       {/* Header with Status and Actions */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 mb-6">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 mb-6 rounded-xl">
         <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
-                <ImageIcon className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-purple-600" />
-                AI Image Generator
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+                  <ImageIcon className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-purple-600" />
+                  AI Image Generator
         </h1>
+                
+                {/* Plan Status */}
+                <div className="flex items-center gap-2">
+                  {isPremium ? (
+                    <div className="flex items-center px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-full text-xs font-medium">
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      <span className="hidden sm:inline">Premium Plan</span>
+                      <span className="sm:hidden">Premium</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                      <span className="hidden sm:inline">Free Plan ({freeLeft} left)</span>
+                      <span className="sm:hidden">Free ({freeLeft})</span>
+                    </div>
+                  )}
+                </div>
+              </div>
               
               {/* Status Indicators */}
               <div className="flex items-center space-x-3">
@@ -489,7 +559,7 @@ export default function GenerateImages() {
       </div>
 
       {/* Top usage / upgrade bar */}
-      <div className="max-w-7xl mx-auto mb-4">
+      {/* <div className="max-w-7xl mx-auto mb-4">
         <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-3 sm:px-4 py-2 sm:py-3">
           <div className="text-sm text-gray-700 flex items-center gap-3">
             <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isPremium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -512,7 +582,7 @@ export default function GenerateImages() {
             </button>
           )}
         </div>
-      </div>
+      </div> */}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 max-w-7xl mx-auto">
         {/* Left: Form */}
@@ -707,29 +777,36 @@ export default function GenerateImages() {
                             <p className="text-xs text-center px-4 mt-1">URL: {image.image_url}</p>
                           </div>
                         {/* Action buttons - always visible */}
-                        <div className="absolute top-2 right-2 flex gap-1 z-100">
-                          <button 
+                        <div className="absolute top-2 right-2 flex gap-1 z-20">
+                            <button 
                             onClick={() => handlePreviewImage(image.image_url)}
                             className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all cursor-pointer"
-                            title="Preview"
-                          >
-                            <Eye className="h-4 w-4 text-gray-700" />
-                          </button>
-                          <button 
+                              title="Preview"
+                            >
+                              <Eye className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button 
                             onClick={() => handleDownloadImage(image.image_url)}
                             className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all cursor-pointer"
-                            title="Download"
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4 text-gray-700" />
+                            </button>
+                            <button 
+                            onClick={() => {
+                              console.log('Like button clicked for image:', image.image_id, image);
+                              handleLikeImage(image.image_id);
+                            }}
+                            className={`p-2 rounded-full shadow-lg transition-all cursor-pointer ${
+                              image.is_liked 
+                                ? 'bg-red-100 bg-opacity-90 hover:bg-opacity-100' 
+                                : 'bg-white bg-opacity-90 hover:bg-red-100'
+                            }`}
+                            title={image.is_liked ? "Unlike" : "Like"}
                           >
-                            <Download className="h-4 w-4 text-gray-700" />
-                          </button>
-                          <button 
-                            onClick={() => handleLikeImage(image.image_id)}
-                            className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-red-100 transition-all cursor-pointer"
-                            title="Like"
-                          >
-                            <Heart className="h-4 w-4 text-red-500" />
-                          </button>
-                          <button 
+                            <Heart className={`h-4 w-4 ${image.is_liked ? 'text-red-500 fill-red-500' : 'text-red-500'}`} />
+                            </button>
+                            <button 
                             onClick={() => handlePublicToCommunity(image.image_id)}
                             className={`p-2 rounded-full shadow-lg transition-all cursor-pointer ${
                               image.is_community_published 
@@ -739,25 +816,25 @@ export default function GenerateImages() {
                             title={image.is_community_published ? "Published to Community" : "Publish to Community"}
                           >
                             <Globe className={`h-4 w-4 ${image.is_community_published ? 'text-green-600' : 'text-gray-700'}`} />
-                          </button>
+                            </button>
                         </div>
                         
                         {/* Delete button - bottom right */}
                         <div className="absolute bottom-2 right-2 z-10">
-                          <button 
+                            <button 
                             onClick={() => handleDeleteImage(image.image_id)}
                             className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-red-100 transition-all cursor-pointer"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4 text-red-600" />
-                          </button>
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-600" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
                       );
                     })}
                 </div>
-              )}
-            </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -783,13 +860,13 @@ export default function GenerateImages() {
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
                       <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                        <button
+            <button
                           onClick={() => handlePreviewImage(image.image_url)}
                           className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
                           title="Preview"
-                        >
+            >
                           <Eye className="h-3 w-3 text-gray-700" />
-                        </button>
+            </button>
                         <button
                           onClick={() => handleDownloadImage(image.image_url)}
                           className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
@@ -800,134 +877,425 @@ export default function GenerateImages() {
                       </div>
                     </div>
                     <div className="mt-2 text-xs text-gray-500 truncate">{image.prompt}</div>
-                  </div>
-                ))}
+                      </div>
+                    ))}
               </div>
             </div>
           </div>
-        </div>
-      )}
+                </div>
+              )}
 
-      {/* Community Images Section */}
-      {communityImages?.data?.images && communityImages.data.images.length > 0 && (
+
+      {/* My Liked Images Section */}
+      {isLoadingLikedImages ? (
         <div className="mt-6 sm:mt-8">
           <div className="bg-white shadow-lg rounded-xl">
             <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
               <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
-                <Heart className="h-5 w-5 mr-2 text-purple-600" />
-                <span className="hidden sm:inline">Community Images</span>
-                <span className="sm:hidden">Community</span>
+                <Heart className="h-5 w-5 mr-2 text-red-500 fill-red-500" />
+                <span className="hidden sm:inline">My Liked Images</span>
+                <span className="sm:hidden">My Liked</span>
               </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
-                {communityImages.data.images.slice(0, 12).map((image) => (
-                  <div key={image.image_id} className="group relative">
-                    <img
-                      src={image.image_url}
-                      alt={image.prompt}
-                      className="w-full h-24 sm:h-32 object-cover rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                    />
-                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 flex gap-1">
-                        <button
-                          onClick={() => handlePreviewImage(image.image_url)}
-                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
-                          title="Preview"
-                        >
-                          <Eye className="h-3 w-3 text-gray-700" />
-                        </button>
-                        <button
-                          onClick={() => handleLikeImage(image.image_id)}
-                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-red-100 transition-colors"
-                          title="Like"
-                        >
-                          <Heart className="h-3 w-3 text-red-500" />
-                        </button>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                  <p className="text-gray-500">Loading liked images...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : likedImagesError ? (
+        <div className="mt-6 sm:mt-8">
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
+                <Heart className="h-5 w-5 mr-2 text-red-500 fill-red-500" />
+                <span className="hidden sm:inline">My Liked Images</span>
+                <span className="sm:hidden">My Liked</span>
+              </h3>
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <X className="h-4 w-4 text-red-500" />
+                  </div>
+                  <p className="text-gray-500 mb-4">Failed to load liked images</p>
+                  <button
+                    onClick={() => refetchLikedImages()}
+                    className="inline-flex items-center cursor-pointer px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors duration-200"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : myLikedImages.length > 0 ? (
+        <div className="mt-6 sm:mt-8">
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
+                <Heart className="h-5 w-5 mr-2 text-red-500 fill-red-500" />
+                <span className="hidden sm:inline">My Liked Images</span>
+                <span className="sm:hidden">My Liked</span>
+                <span className="ml-2 text-sm text-gray-500">({myLikedImages.length})</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-6 gap-4 sm:gap-6">
+                {myLikedImages.map((image) => {
+                  console.log('Rendering liked image:', image);
+                  console.log('Liked image URL for display:', image.image_url);
+                  return (
+                    <div key={image.image_id} className="group relative bg-white rounded-xl shadow-md hover:shadow-lg transition-all duration-300 overflow-hidden">
+                      {/* Loading indicator */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
+                        <div className="text-center">
+                          <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin mx-auto mb-1"></div>
+                          <p className="text-xs text-gray-600">Loading...</p>
+        </div>
+      </div>
+                      <img
+                        src={image.image_url}
+                        alt={image.prompt}
+                        className="w-full h-48 sm:h-56 md:h-48 lg:h-52 xl:h-48 object-cover hover:scale-105 transition-transform duration-300 relative z-20"
+                        onLoad={(e) => {
+                          console.log('Liked image loaded successfully:', image.image_url);
+                          console.log('Image dimensions:', e.currentTarget.naturalWidth, 'x', e.currentTarget.naturalHeight);
+                          // Hide loading indicator
+                          const loadingIndicator = e.currentTarget.previousElementSibling as HTMLElement;
+                          if (loadingIndicator) {
+                            loadingIndicator.style.display = 'none';
+                          }
+                        }}
+                        onError={(e) => {
+                          console.error('Liked image failed to load:', image.image_url, e);
+                          // Hide loading indicator and show error state
+                          const loadingIndicator = e.currentTarget.previousElementSibling as HTMLElement;
+                          if (loadingIndicator) {
+                            loadingIndicator.style.display = 'none';
+                          }
+                          e.currentTarget.style.display = 'none';
+                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (nextElement) {
+                            nextElement.style.display = 'flex';
+                          }
+                        }}
+                        style={{ 
+                          minHeight: '96px',
+                          backgroundColor: '#f3f4f6',
+                          display: 'block',
+                          position: 'relative',
+                          zIndex: 20
+                        }}
+                      />
+                      {/* Error fallback */}
+                      <div className="w-full h-48 sm:h-56 md:h-48 lg:h-52 xl:h-48 bg-gray-200 flex items-center justify-center text-gray-500 text-xs" style={{ display: 'none' }}>
+                        <div className="text-center">
+                          <ImageIcon className="h-6 w-6 mx-auto mb-1" />
+                          <div>Failed to load</div>
+                        </div>
+                      </div>
+                    {/* Liked indicator */}
+                    <div className="absolute top-1 left-1 bg-red-500 text-white rounded-full p-1">
+                      <Heart className="h-3 w-3 fill-white" />
+                    </div>
+                    {/* Action Buttons - Always Visible */}
+                    <div className="absolute top-2 right-2 flex gap-1 z-30">
+                      <button
+                        onClick={() => handlePreviewImage(image.image_url, image.prompt, image)}
+                        className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all duration-200 hover:scale-110"
+                        title="Preview"
+                      >
+                        <Eye className="h-4 w-4 text-gray-700" />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadImage(image.image_url)}
+                        className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all duration-200 hover:scale-110"
+                        title="Download"
+                      >
+                        <Download className="h-4 w-4 text-gray-700" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          console.log('Like button clicked for image:', image.image_id, image);
+                          handleLikeImage(image.image_id);
+                        }}
+                        className="p-2 bg-red-100 bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all duration-200 hover:scale-110"
+                        title="Unlike"
+                      >
+                        <Heart className="h-4 w-4 text-red-500 fill-red-500" />
+                      </button>
+                      {/* <button
+                        onClick={() => {
+                          if (image.image_id) {
+                            publishImage({ imageId: image.image_id, isPublished: true });
+                          }
+                        }}
+                        className={`px-3 py-2 rounded-full text-xs font-medium shadow-lg transition-all duration-200 hover:scale-110 ${
+                          image.is_community_published 
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                        }`}
+                        title={image.is_community_published ? "Published" : "Publish to Community"}
+                      >
+                        {image.is_community_published ? 'Published' : 'Publish'}
+                      </button> */}
+                    </div>
+                    {/* Image Info */}
+                    <div className="p-3 bg-gray-50">
+                      <p className="text-sm text-gray-700 mb-2 leading-relaxed overflow-hidden" style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical'
+                      }}>
+                        {image.prompt}
+                      </p>
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2 py-1 bg-gray-200 rounded-full text-xs font-medium">
+                            {image.style}
+                          </span>
+                          <span className="px-2 py-1 bg-gray-200 rounded-full text-xs font-medium">
+                            {image.aspect_ratio}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-red-500">
+                          <Heart className="h-3 w-3 mr-1 fill-red-500" />
+                          <span className="font-medium">{image.likes_count || 0}</span>
+                        </div>
                       </div>
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                      <span className="truncate flex-1">{image.prompt}</span>
-                      <span className="ml-2 flex items-center">
-                        <Heart className="h-3 w-3 mr-1" />
-                        {image.likes_count}
-                      </span>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-6 sm:mt-8">
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
+                <Heart className="h-5 w-5 mr-2 text-red-500 fill-red-500" />
+                <span className="hidden sm:inline">My Liked Images</span>
+                <span className="sm:hidden">My Liked</span>
+                <span className="ml-2 text-sm text-gray-500">(0)</span>
+              </h3>
+              <div className="text-center py-8">
+                <Heart className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg mb-2">No liked images yet</p>
+                <p className="text-gray-400 text-sm">Like some of your generated images to see them here!</p>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* Amazing Fullscreen Preview Modal */}
       {previewImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="relative max-w-4xl max-h-full">
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute -top-4 -right-4 z-10 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
-            >
-              <X className="h-6 w-6 text-gray-700" />
-            </button>
-            <img
-              src={previewImage}
-              alt="Preview"
-              className="max-w-full max-h-full rounded-lg shadow-2xl"
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Share Modal */}
-      {showShareModal && shareImageUrl && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Share Image</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
+          <div className="relative w-full h-full max-w-7xl max-h-full flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4 px-2">
+              <div className="flex items-center space-x-4">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-2 rounded-lg">
+                  <Eye className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Image Preview</h2>
+                  <p className="text-gray-300 text-sm">Generated with AI</p>
+                </div>
+              </div>
               <button
-                onClick={() => setShowShareModal(false)}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                onClick={() => {
+                  setPreviewImage(null);
+                  setPreviewPrompt('');
+                  setPreviewImageData(null);
+                }}
+                className="p-3 bg-white bg-opacity-20 backdrop-blur-sm rounded-full shadow-lg hover:bg-opacity-30 transition-all duration-200 cursor-pointer group"
               >
-                <X className="h-5 w-5 text-gray-500" />
+                <X className="h-6 w-6 text-white group-hover:scale-110 transition-transform" />
               </button>
             </div>
             
+            {/* Main Content */}
+            <div className="flex-1 flex flex-col lg:flex-row gap-6 overflow-hidden">
+              {/* Image Section */}
+              <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-4 shadow-2xl">
+                <div className="relative w-full h-full flex items-center justify-center">
+            <img
+              src={previewImage}
+                    alt={previewPrompt || "AI Generated Image"}
+                    className="max-w-full max-h-full object-contain rounded-xl shadow-2xl"
+                    style={{ maxHeight: '70vh' }}
+            />
+                  {/* Image Overlay Effects */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl pointer-events-none"></div>
+          </div>
+              </div>
+
+              {/* Details Panel */}
+              <div className="w-full lg:w-96 bg-white bg-opacity-95 backdrop-blur-sm rounded-2xl p-6 shadow-2xl overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Prompt Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <span className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-sm mr-2">PROMPT</span>
+                    </h3>
+                    <p className="text-gray-700 leading-relaxed bg-gray-50 p-4 rounded-lg border-l-4 border-purple-500">
+                      {previewPrompt || "No prompt available"}
+                    </p>
+                  </div>
+
+                  {/* Image Details */}
+                  {previewImageData && (
             <div className="space-y-4">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                        <span className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-3 py-1 rounded-full text-sm mr-2">DETAILS</span>
+                      </h3>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Style</p>
+                          <p className="font-medium text-gray-900 capitalize">{previewImageData.style || 'Unknown'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Model</p>
+                          <p className="font-medium text-gray-900 capitalize">{previewImageData.model || 'Clipdrop'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Quality</p>
+                          <p className="font-medium text-gray-900 capitalize">{previewImageData.quality || 'Standard'}</p>
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-lg">
+                          <p className="text-xs text-gray-500 uppercase tracking-wide">Aspect Ratio</p>
+                          <p className="font-medium text-gray-900">{previewImageData.aspect_ratio || '1:1'}</p>
+                        </div>
+                      </div>
+
+                      {/* Revised Prompt Section */}
+                      {previewImageData.revised_prompt && previewImageData.revised_prompt !== previewPrompt && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Image URL
-                </label>
-                <div className="flex">
-                  <input
-                    type="text"
-                    value={shareImageUrl}
-                    readOnly
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-l-lg bg-gray-50 text-sm"
-                  />
+                          <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center">
+                            <span className="bg-gradient-to-r from-orange-500 to-yellow-500 text-white px-2 py-1 rounded-full text-xs mr-2">REVISED PROMPT</span>
+                          </h4>
+                          <p className="text-gray-600 text-sm leading-relaxed bg-orange-50 p-3 rounded-lg border-l-4 border-orange-500">
+                            {previewImageData.revised_prompt}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Creation Date */}
+                      {previewImageData.created_at && (
+                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                          <p className="text-xs text-blue-500 uppercase tracking-wide">Created</p>
+                          <p className="font-medium text-blue-700">
+                            {new Date(previewImageData.created_at).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Publication Status */}
+                      <div className={`p-3 rounded-lg border ${previewImageData.is_community_published ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                        <p className={`text-xs uppercase tracking-wide ${previewImageData.is_community_published ? 'text-green-500' : 'text-gray-500'}`}>
+                          Community Status
+                        </p>
+                        <p className={`font-medium flex items-center ${previewImageData.is_community_published ? 'text-green-700' : 'text-gray-700'}`}>
+                          {previewImageData.is_community_published ? (
+                            <>
+                              <Globe className="h-4 w-4 mr-1" />
+                              Published
+                            </>
+                          ) : (
+                            <>
+                              <X className="h-4 w-4 mr-1" />
+                              Private
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      {previewImageData.likes_count !== undefined && (
+                        <div className="bg-red-50 p-3 rounded-lg border border-red-200">
+                          <p className="text-xs text-red-500 uppercase tracking-wide">Community Likes</p>
+                          <p className="font-medium text-red-700 flex items-center">
+                            <Heart className="h-4 w-4 mr-1 fill-red-500" />
+                            {previewImageData.likes_count}
+                          </p>
+                        </div>
+                      )}
+        </div>
+      )}
+
+                  {/* Action Buttons */}
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                      <span className="bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full text-sm mr-2">ACTIONS</span>
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => copyToClipboard(shareImageUrl)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-r-lg hover:bg-green-700 transition-colors text-sm cursor-pointer"
-                  >
-                    Copy
+                        onClick={() => handleDownloadImage(previewImage)}
+                        className="flex items-center justify-center space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                        <Download className="h-4 w-4" />
+                        <span className="font-medium">Download</span>
+              </button>
+                      
+                  <button
+                        onClick={() => {
+                          copyToClipboard(previewImage);
+                        }}
+                        className="flex items-center justify-center space-x-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-3 rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                      >
+                        <Copy className="h-4 w-4" />
+                        <span className="font-medium">Copy Link</span>
                   </button>
-            </div>
           </div>
 
-              <div className="flex space-x-3">
+                    {previewImageData && (
+                      <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => handlePublicToCommunity(shareImageUrl)}
-                  className="flex-1 flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
-                >
-                  <Globe className="h-4 w-4 mr-2" />
-                  Share to Community
+                          onClick={() => {
+                            if (previewImageData.image_id) {
+                              handleLikeImage(previewImageData.image_id);
+                            }
+                          }}
+                          className={`flex items-center justify-center space-x-2 px-4 py-3 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 ${
+                            previewImageData.is_liked 
+                              ? 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700' 
+                              : 'bg-gradient-to-r from-gray-500 to-gray-600 text-white hover:from-gray-600 hover:to-gray-700'
+                          }`}
+                        >
+                          <Heart className={`h-4 w-4 ${previewImageData.is_liked ? 'fill-white' : ''}`} />
+                          <span className="font-medium">
+                            {previewImageData.is_liked ? 'Liked' : 'Like'}
+                          </span>
                 </button>
+                        
                 <button
-                  onClick={() => handleDownloadImage(shareImageUrl)}
-                  className="flex-1 flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
+                          onClick={() => {
+                            if (previewImageData.image_id) {
+                              publishImage({ imageId: previewImageData.image_id, isPublished: true });
+                            }
+                          }}
+                          className="flex items-center justify-center space-x-2 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-3 rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                        >
+                          <Share className="h-4 w-4" />
+                          <span className="font-medium">Publish</span>
                 </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
