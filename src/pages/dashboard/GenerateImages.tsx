@@ -1,15 +1,78 @@
-import { useEffect, useState } from 'react';
-import { useUser, Protect } from '@clerk/clerk-react';
-import { Image as ImageIcon, Download, Trash2, Eye, Sparkles, Share2, Globe, X } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { useUser } from '@clerk/clerk-react';
+import { Image as ImageIcon, Download, Trash2, Eye, Sparkles, Share2, Globe, X, Save, Loader2, Heart, RefreshCw } from 'lucide-react';
+import { 
+  useGenerateAiImageMutation, 
+  useGetUserCreationsQuery, 
+  usePublishImageMutation,
+  useLikeImageMutation,
+  useGetCommunityImagesQuery 
+} from '../../services/api';
+import Toaster, { useToaster } from '../../components/Toaster';
+
+interface ImageGenerationData {
+  prompt: string;
+  selectedStyle: string;
+  selectedAspectRatio: string;
+  generatedImages: Array<{
+    image_id: string;
+    image_url: string;
+    prompt: string;
+    style: string;
+    aspect_ratio: string;
+    is_community_published: boolean;
+    created_at: string;
+  }>;
+  lastGenerated: Date | null;
+}
+
+// Enhanced localStorage utilities
+const STORAGE_KEYS = {
+  IMAGE_GENERATION_DATA: 'genio_image_generation_data',
+  LAST_SAVED: 'genio_image_last_saved',
+  AUTO_SAVE_ENABLED: 'genio_image_auto_save_enabled'
+};
+
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (error) {
+    console.error(`Failed to load ${key} from localStorage:`, error);
+  }
+  return defaultValue;
+};
+
+const saveToStorage = <T,>(key: string, value: T): void => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.error(`Failed to save ${key} to localStorage:`, error);
+  }
+};
 
 export default function GenerateImages() {
   const { user, isLoaded } = useUser();
-  const [prompt, setPrompt] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState('Realistic');
-  const [selectedModel, setSelectedModel] = useState('DALL-E 3');
-  const [selectedAspectRatio, setSelectedAspectRatio] = useState('1:1');
+  const toaster = useToaster();
+  
+  const [imageData, setImageData] = useState<ImageGenerationData>(() => 
+    loadFromStorage(STORAGE_KEYS.IMAGE_GENERATION_DATA, {
+      prompt: '',
+      selectedStyle: 'realistic',
+      selectedAspectRatio: 'square',
+      generatedImages: [],
+      lastGenerated: null
+    })
+  );
+  
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(() => {
+    const saved = loadFromStorage(STORAGE_KEYS.LAST_SAVED, null);
+    return saved ? new Date(saved) : null;
+  });
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
@@ -17,6 +80,56 @@ export default function GenerateImages() {
   const [freeLeft, setFreeLeft] = useState<number>(5);
   const [showUpgrade, setShowUpgrade] = useState(false);
 
+  // Debounced save function
+  const saveTimeoutRef = useRef<number | null>(null);
+
+  const debouncedSave = (data: ImageGenerationData) => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = window.setTimeout(() => {
+      setIsAutoSaving(true);
+      try {
+        saveToStorage(STORAGE_KEYS.IMAGE_GENERATION_DATA, data);
+        saveToStorage(STORAGE_KEYS.LAST_SAVED, new Date().toISOString());
+        setLastSaved(new Date());
+        toaster.showInfo('Auto-saved', 'Your image generation data has been saved automatically');
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        toaster.showError('Auto-save Failed', 'Could not save your data automatically');
+      } finally {
+        setIsAutoSaving(false);
+      }
+    }, 2000);
+  };
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (imageData.prompt || imageData.generatedImages.length > 0) {
+      debouncedSave(imageData);
+    }
+    
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [imageData]);
+
+  // API integration
+  const [generateAiImage, { isLoading: isGeneratingImage, error: generationError }] = useGenerateAiImageMutation();
+  const [publishImage] = usePublishImageMutation();
+  const [likeImage] = useLikeImageMutation();
+  const { data: userCreations, refetch: refetchCreations } = useGetUserCreationsQuery();
+  const { data: communityImages, refetch: refetchCommunity } = useGetCommunityImagesQuery({
+    page: 1,
+    limit: 20,
+    sortBy: 'created_at',
+    sortOrder: 'desc'
+  });
+
+  // Premium plan detection
   useEffect(() => {
     if (!isLoaded) return;
     type Metadata = { plan?: unknown; isPremium?: unknown; tier?: unknown; currentPlan?: unknown } | undefined;
@@ -35,18 +148,6 @@ export default function GenerateImages() {
 
     const premium = ['premium', 'premiun', 'pro', 'paid', 'active'].includes(plan) || ['true', 'yes', '1'].includes(flag);
 
-    // Debug Clerk plan values in console
-    console.log('[GenerateImages] Plan check', {
-      userId: user?.id,
-      planRaw: publicMeta?.plan ?? unsafeMeta?.plan ?? publicMeta?.tier ?? unsafeMeta?.tier ?? publicMeta?.currentPlan ?? unsafeMeta?.currentPlan,
-      planNormalized: plan,
-      isPremiumFlagRaw: publicMeta?.isPremium ?? unsafeMeta?.isPremium,
-      isPremiumFlagNormalized: flag,
-      premiumEvaluated: premium,
-      publicMetadata: user?.publicMetadata,
-      unsafeMetadata: user?.unsafeMetadata,
-    });
-
     setIsPremium(!!premium);
 
     if (!premium) {
@@ -61,7 +162,11 @@ export default function GenerateImages() {
   }, [isLoaded, user]);
 
   const handleGenerateImage = async () => {
-    if (!prompt.trim()) return;
+    if (!imageData.prompt.trim()) {
+      toaster.showError('Missing Prompt', 'Please enter a description for your image');
+      return;
+    }
+    
     if (!isPremium) {
       if (freeLeft <= 0) {
         setShowUpgrade(true);
@@ -73,15 +178,96 @@ export default function GenerateImages() {
     }
     
     setIsGenerating(true);
-    // Clear previous images for new generation
-    setGeneratedImages([]);
+    const loadingToastId = toaster.showLoading('Generating Image', 'Creating your AI-generated image...');
     
-    // Simulate API call
-    setTimeout(() => {
-      const newImage = `https://picsum.photos/512/512?random=${Date.now()}`;
-      setGeneratedImages([newImage]);
+    try {
+      const response = await generateAiImage({
+        prompt: imageData.prompt.trim(),
+        style: imageData.selectedStyle,
+        aspectRatio: imageData.selectedAspectRatio,
+        publishToCommunity: false
+      }).unwrap();
+      
+      console.log('Full API response:', response);
+      
+      if (response.success && response.data) {
+        console.log('Image generation response:', response.data);
+        console.log('Image URL:', response.data.image_url);
+        
+        // Validate that we have a valid image URL
+        if (!response.data.image_url) {
+          throw new Error('No image URL returned from server');
+        }
+        
+        const newImage = {
+          image_id: response.data.image_id,
+          image_url: response.data.image_url,
+          prompt: response.data.prompt,
+          style: response.data.style,
+          aspect_ratio: response.data.aspect_ratio,
+          is_community_published: response.data.is_community_published,
+          created_at: new Date().toISOString()
+        };
+        
+        console.log('New image object:', newImage);
+        
+        // Test if the image URL is accessible
+        try {
+          const testResponse = await fetch(newImage.image_url, { method: 'HEAD' });
+          console.log('Image URL accessibility test:', testResponse.status);
+          if (!testResponse.ok) {
+            console.warn('Image URL may not be accessible:', testResponse.status);
+          }
+        } catch (urlError) {
+          console.error('Image URL test failed:', urlError);
+        }
+        
+        setImageData(prev => ({
+          ...prev,
+          generatedImages: [newImage], // Replace previous images
+          lastGenerated: new Date()
+        }));
+        
+        // Auto-refresh user creations
+        refetchCreations();
+        
+        toaster.removeToast(loadingToastId);
+        toaster.showSuccess('Image Generated!', 'Your AI image has been created successfully');
+      } else {
+        console.error('API response not successful:', response);
+        throw new Error(response.message || 'Failed to generate image');
+      }
+    } catch (error: any) {
+      let message = 'Unknown error occurred';
+      
+      if (error?.data?.message) {
+        message = error.data.message;
+      } else if (error?.message) {
+        message = error.message;
+      } else if (generationError && 'data' in generationError) {
+        const errorData = generationError.data as any;
+        message = errorData?.message || errorData?.error || 'API error occurred';
+      }
+      
+      // Provide more helpful error messages
+      if (message.includes('premium users')) {
+        message = 'Image generation is only available for premium users. Please upgrade your plan.';
+        setShowUpgrade(true);
+      } else if (message.includes('Unauthorized')) {
+        message = 'Please log in again to continue generating images.';
+      } else if (message.includes('Content policy violation')) {
+        message = 'Your prompt violates content policy. Please modify your description and try again.';
+      } else if (message.includes('Rate limit exceeded')) {
+        message = 'Rate limit exceeded. Please wait a moment before trying again.';
+      } else if (message.includes('Invalid request')) {
+        message = 'Invalid request. Please check your prompt and try again.';
+      }
+      
+      toaster.removeToast(loadingToastId);
+      toaster.showError('Generation Failed', message);
+    } finally {
       setIsGenerating(false);
-    }, 3000);
+    }
   };
 
   const handlePreviewImage = (imageUrl: string) => {
@@ -100,16 +286,22 @@ export default function GenerateImages() {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      toaster.showSuccess('Downloaded!', 'Image downloaded successfully');
     } catch (error) {
       console.error('Download failed:', error);
+      toaster.showError('Download Failed', 'Could not download the image');
     }
   };
 
-  const handleDeleteImage = (imageUrl: string) => {
-    setGeneratedImages(prev => prev.filter(img => img !== imageUrl));
-    if (previewImage === imageUrl) {
+  const handleDeleteImage = (imageId: string) => {
+    setImageData(prev => ({
+      ...prev,
+      generatedImages: prev.generatedImages.filter(img => img.image_id !== imageId)
+    }));
+    if (previewImage && imageData.generatedImages.find(img => img.image_id === imageId)?.image_url === previewImage) {
       setPreviewImage(null);
     }
+    toaster.showInfo('Image Deleted', 'Image has been removed from your collection');
   };
 
   const handleShareImage = (imageUrl: string) => {
@@ -117,124 +309,222 @@ export default function GenerateImages() {
     setShowShareModal(true);
   };
 
-  const handlePublicToCommunity = async (imageUrl: string) => {
+  const handlePublicToCommunity = async (imageId: string) => {
     try {
-      // Simulate API call to make image public
-      console.log('Making image public to community:', imageUrl);
-      // You would implement the actual API call here
-      alert('Image has been shared to the community!');
-    } catch (error) {
+      const response = await publishImage({
+        imageId,
+        isPublished: true
+      }).unwrap();
+      
+      if (response.success) {
+        setImageData(prev => ({
+          ...prev,
+          generatedImages: prev.generatedImages.map(img => 
+            img.image_id === imageId 
+              ? { ...img, is_community_published: true }
+              : img
+          )
+        }));
+        
+        // Refresh community images
+        refetchCommunity();
+        
+        toaster.showSuccess('Published!', 'Image has been shared to the community');
+      }
+    } catch (error: any) {
       console.error('Failed to share to community:', error);
+      toaster.showError('Publish Failed', 'Could not publish image to community');
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Link copied to clipboard!');
+  const handleLikeImage = async (imageId: string) => {
+    try {
+      const response = await likeImage({ imageId }).unwrap();
+      if (response.success) {
+        toaster.showSuccess('Liked!', response.data.is_liked ? 'Image liked' : 'Image unliked');
+        // Refresh community images to update like count
+        refetchCommunity();
+      }
+    } catch (error: any) {
+      console.error('Failed to like image:', error);
+      toaster.showError('Like Failed', 'Could not like/unlike image');
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toaster.showSuccess('Copied!', 'Link copied to clipboard');
+    } catch (error) {
+      toaster.showError('Copy Failed', 'Could not copy to clipboard');
+    }
+  };
+
+  const clearAllData = () => {
+    // Clear localStorage
+    Object.values(STORAGE_KEYS).forEach(key => {
+      localStorage.removeItem(key);
+    });
+    
+    // Reset state
+    setImageData({
+      prompt: '',
+      selectedStyle: 'realistic',
+      selectedAspectRatio: 'square',
+      generatedImages: [],
+      lastGenerated: null
+    });
+    setLastSaved(null);
+    
+    toaster.showInfo('Data Cleared', 'All image generation data has been cleared');
+  };
+
+  const forceSave = () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    setIsAutoSaving(true);
+    try {
+      saveToStorage(STORAGE_KEYS.IMAGE_GENERATION_DATA, imageData);
+      saveToStorage(STORAGE_KEYS.LAST_SAVED, new Date().toISOString());
+      setLastSaved(new Date());
+      toaster.showSuccess('Saved', 'Your image generation data has been saved successfully');
+    } catch (error) {
+      console.error('Save failed:', error);
+      toaster.showError('Save Failed', 'Could not save your data');
+    } finally {
+      setIsAutoSaving(false);
+    }
   };
 
 
 
   const imageStyles = [
-    'Realistic',
-    'Ghibli Style',
-    'Cartoon',
-    'Abstract',
-    'Minimalist',
-    'Vintage',
-    'Futuristic',
-    'Watercolor',
-    'Oil Painting',
-    'Sketch',
-    'Line Art',
-    'Pixel Art',
-    'Isometric',
-    'Low Poly',
-    'Cyberpunk',
-  ];
-
-  const models = [
-    { name: 'DALL-E 3', color: 'from-green-500 to-green-700', icon: '🎨' },
-    { name: 'DALL-E 2', color: 'from-purple-500 to-purple-700', icon: '🖼️' },
-    { name: 'Midjourney', color: 'from-green-500 to-green-700', icon: '✨' },
-    { name: 'Stable Diffusion', color: 'from-orange-500 to-orange-700', icon: '⚡' },
-    { name: 'Imagen', color: 'from-pink-500 to-pink-700', icon: '🌟' },
+    { label: 'Realistic', value: 'realistic' },
+    { label: 'Ghibli Style', value: 'ghibli' },
+    { label: 'Cartoon', value: 'cartoon' },
+    { label: 'Abstract', value: 'abstract' },
+    { label: 'Minimalist', value: 'minimalist' },
+    { label: 'Vintage', value: 'vintage' },
+    { label: 'Futuristic', value: 'futuristic' },
+    { label: 'Watercolor', value: 'watercolor' },
   ];
 
   const aspectRatios = [
-    { label: 'Square (1:1)', value: '1:1', description: '1024x1024' },
-    { label: 'Landscape (16:9)', value: '16:9', description: '1920x1080' },
-    { label: 'Portrait (9:16)', value: '9:16', description: '1080x1920' },
-    { label: 'Wide (3:2)', value: '3:2', description: '1536x1024' },
-    { label: 'Tall (2:3)', value: '2:3', description: '1024x1536' },
-    { label: 'Ultra Wide (21:9)', value: '21:9', description: '2560x1080' },
+    { label: 'Square', value: 'square', description: '1:1' },
+    { label: 'Portrait', value: 'portrait', description: '9:16' },
+    { label: 'Landscape', value: 'landscape', description: '16:9' },
   ];
-
-  const selectedModelMeta = models.find(m => m.name === selectedModel);
-  const selectedModelColor = selectedModelMeta?.color ?? 'from-green-500 to-green-700';
-  const selectedModelIcon = selectedModelMeta?.icon ?? '🎨';
-  const selectedModelTextColor = (
-    {
-      'DALL-E 3': 'text-green-600',
-      'DALL-E 2': 'text-purple-600',
-      'Midjourney': 'text-green-600',
-      'Stable Diffusion': 'text-orange-600',
-      'Imagen': 'text-pink-600',
-    } as Record<string, string>
-  )[selectedModel] ?? 'text-green-600';
 
   return (
     <>
-      {/* Page header */}
-      {/* <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
-          <ImageIcon className="h-6 w-6 mr-3 text-purple-600" />
-          Generate Images
+      <Toaster toasts={toaster.toasts} onRemove={toaster.removeToast} />
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+        `
+      }} />
+      
+      {/* Header with Status and Actions */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-30 mb-6">
+        <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+                <ImageIcon className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-purple-600" />
+                AI Image Generator
         </h1>
-        <p className="mt-2 text-sm text-gray-700">
-          Create stunning images with AI-powered generation from text prompts.
-        </p>
-      </div> */}
+              
+              {/* Status Indicators */}
+              <div className="flex items-center space-x-3">
+                {isAutoSaving && (
+                  <div className="flex items-center text-xs sm:text-sm text-gray-500">
+                    <div className="animate-spin h-3 w-3 sm:h-4 sm:w-4 border-2 border-gray-300 border-t-gray-600 rounded-full mr-1 sm:mr-2"></div>
+                    <span className="hidden sm:inline">Auto-saving...</span>
+                    <span className="sm:hidden">Saving...</span>
+                  </div>
+                )}
+                {lastSaved && !isAutoSaving && (
+                  <div className="text-xs sm:text-sm text-gray-500">
+                    <span className="hidden sm:inline">Saved {lastSaved.toLocaleTimeString()}</span>
+                    <span className="sm:hidden">Saved</span>
+                  </div>
+                )}
+                {imageData.lastGenerated && (
+                  <div className="text-xs sm:text-sm text-gray-500">
+                    <span className="hidden sm:inline">Last generated: {new Date(imageData.lastGenerated).toLocaleTimeString()}</span>
+                    <span className="sm:hidden">Generated</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <button
+                onClick={forceSave}
+                className="inline-flex items-center px-2 sm:px-3 py-2 border border-gray-300 text-xs sm:text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+              >
+                <Save className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Save</span>
+              </button>
+              
+              <button
+                onClick={clearAllData}
+                className="inline-flex items-center px-2 sm:px-3 py-2 border border-red-300 text-xs sm:text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                title="Clear all data and start fresh"
+              >
+                <X className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Clear</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Top usage / upgrade bar */}
       <div className="max-w-7xl mx-auto mb-4">
-        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-4 py-2">
+        <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-xl px-3 sm:px-4 py-2 sm:py-3">
           <div className="text-sm text-gray-700 flex items-center gap-3">
             <span className={`px-2 py-0.5 rounded-md text-xs font-medium ${isPremium ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
               Plan: {isPremium ? 'Premium' : 'Free'}
             </span>
             {!isPremium && (
-              <span>
-                Free generations left: <span className="font-semibold">{freeLeft}</span>
+              <span className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Free generations left: </span>
+                <span className="font-semibold">{freeLeft}</span>
               </span>
             )}
           </div>
           {!isPremium && (
             <button
               onClick={() => setShowUpgrade(true)}
-              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
+              className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer"
             >
-              Go Premium
+              <span className="hidden sm:inline">Go Premium</span>
+              <span className="sm:hidden">Upgrade</span>
             </button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl mx-auto">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 max-w-7xl mx-auto">
         {/* Left: Form */}
-        <div className="bg-white shadow rounded-lg min-h-[530px] xl:h-[530px]">
-          <div className="px-4 py-5 sm:p-6 h-full flex flex-col">
-            <h3 className="text-lg leading-6 font-semibold text-gray-900 flex items-center mb-6">
-              <Sparkles className={`h-5 w-5 mr-2 ${selectedModelTextColor}`} />
-              AI Image Generator
+        <div className="bg-white shadow-lg rounded-xl h-[500px] sm:h-[600px]">
+          <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 h-full flex flex-col">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center mb-4 sm:mb-6">
+              <Sparkles className="h-5 w-5 mr-2 text-purple-600" />
+              <span className="hidden sm:inline">AI Image Generator</span>
+              <span className="sm:hidden">Generator</span>
             </h3>
 
-            <Protect
-              plan="premium"
-              fallback={
-                <div className="space-y-6 flex-1">
-                  {/* Free users: UI remains the same; free limit enforced below via handleGenerateImage */}
-            
+            <div className="space-y-4 sm:space-y-6 flex-1">
                   <div>
                     <label htmlFor="prompt" className="block text-sm font-medium text-gray-700 mb-2">
                     Describe Your Image
@@ -242,171 +532,229 @@ export default function GenerateImages() {
                     <textarea
                       id="prompt"
                     rows={4}
-                      value={prompt}
-                      onChange={(e) => setPrompt(e.target.value)}
-                    className="block w-full rounded-xl border border-gray-200 p-2 bg-gray-50 shadow-sm focus:border-green-500 focus:ring-4 focus:ring-green-100 sm:text-sm placeholder:text-gray-400 transition-colors resize-none"
-                    placeholder="Describe what you want to see in the image.."
+                  value={imageData.prompt}
+                  onChange={(e) => setImageData(prev => ({ ...prev, prompt: e.target.value }))}
+                  className="block w-full rounded-xl border border-gray-200 p-3 bg-gray-50 shadow-sm focus:border-purple-500 focus:ring-4 focus:ring-purple-100 text-sm placeholder:text-gray-400 transition-colors resize-none"
+                  placeholder="Describe what you want to see in the image..."
                     />
                   </div>
             
                   <div>
                     <p className="block text-sm font-medium text-gray-700 mb-2">Style</p>
-                    <div className="flex flex-wrap items-center gap-2 max-h-24 overflow-y-auto pr-1">
+                <div className="flex flex-wrap items-center gap-2 max-h-32 overflow-y-auto pr-1 scrollbar-hide">
                       {imageStyles.map((style) => {
-                        const isActive = selectedStyle === style;
+                    const isActive = imageData.selectedStyle === style.value;
                         return (
                           <button
-                            key={style}
+                        key={style.value}
                             type="button"
-                            onClick={() => setSelectedStyle(style)}
+                        onClick={() => setImageData(prev => ({ ...prev, selectedStyle: style.value }))}
                             className={
-                              `px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap cursor-pointer ` +
+                          `px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all whitespace-nowrap cursor-pointer ` +
                               (isActive
-                                ? 'bg-blue-100 text-blue-700 shadow-sm'
-                                : 'text-gray-600 hover:text-blue-600 hover:bg-white hover:shadow-sm bg-white border border-gray-200')
+                            ? 'bg-purple-100 text-purple-700 shadow-sm'
+                            : 'text-gray-600 hover:text-purple-600 hover:bg-white hover:shadow-sm bg-white border border-gray-200')
                             }
                             aria-pressed={isActive}
                           >
-                            {style}
+                        {style.label}
                           </button>
                         );
                       })}
                     </div>
-                  </div>
-            
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                      <p className="block text-sm font-medium text-gray-700 mb-2">Model</p>
-                      <select 
-                        value={selectedModel}
-                        onChange={(e) => setSelectedModel(e.target.value)}
-                        className="block w-full rounded-xl border border-gray-200 p-2 bg-gray-50 shadow-sm focus:border-green-500 focus:ring-4 focus:ring-green-100 sm:text-sm transition-colors cursor-pointer"
-                      >
-                        {models.map((model) => (
-                          <option key={model.name} value={model.name}>{model.name}</option>
-                        ))}
-                        </select>
                       </div>
             
                       <div>
                       <p className="block text-sm font-medium text-gray-700 mb-2">Aspect Ratio</p>
-                      <select 
-                        value={selectedAspectRatio}
-                        onChange={(e) => setSelectedAspectRatio(e.target.value)}
-                        className="block w-full rounded-xl border border-gray-200 p-2 bg-gray-50 shadow-sm focus:border-green-500 focus:ring-4 focus:ring-green-100 sm:text-sm transition-colors cursor-pointer"
+                <div className="grid grid-cols-3 gap-2">
+                  {aspectRatios.map((ratio) => {
+                    const isActive = imageData.selectedAspectRatio === ratio.value;
+                    return (
+                      <button
+                        key={ratio.value}
+                        type="button"
+                        onClick={() => setImageData(prev => ({ ...prev, selectedAspectRatio: ratio.value }))}
+                        className={
+                          `px-3 py-2 rounded-xl text-xs sm:text-sm font-medium transition-all ` +
+                          (isActive
+                            ? 'bg-purple-100 text-purple-700 shadow-sm'
+                            : 'text-gray-600 hover:text-purple-600 hover:bg-white hover:shadow-sm bg-white border border-gray-200')
+                        }
+                        aria-pressed={isActive}
                       >
-                        {aspectRatios.map((ratio) => (
-                          <option key={ratio.value} value={ratio.value}>
-                            {ratio.label} - {ratio.description}
-                          </option>
-                        ))}
-                        </select>
+                        <div className="font-medium">{ratio.label}</div>
+                        <div className="text-xs text-gray-500">{ratio.description}</div>
+                      </button>
+                    );
+                  })}
                       </div>
                     </div>
             
                     <button
                     onClick={handleGenerateImage}
-                    disabled={!prompt.trim() || isGenerating}
-                    className={`w-full inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all bg-gradient-to-r ${selectedModelColor} hover:shadow-lg cursor-pointer`}
+                disabled={!imageData.prompt.trim() || isGenerating || isGeneratingImage}
+                className="w-full inline-flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-gradient-to-r from-purple-500 to-purple-700 hover:from-purple-600 hover:to-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
-                    {isGenerating ? (
+                {(isGenerating || isGeneratingImage) ? (
                       <>
-                        <div className="animate-spin -ml-1 mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                        Generating image...
+                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Generating image...</span>
+                    <span className="sm:hidden">Generating...</span>
                       </>
                     ) : (
                       <>
-                        <span className="mr-2 text-base">{selectedModelIcon}</span>
-                        Generate image
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Generate Image</span>
+                    <span className="sm:hidden">Generate</span>
                       </>
                     )}
                   </button>
                 </div>
-              }
-            />
-            
-            
           </div>
         </div>
 
         {/* Right: Output */}
-        <div className="bg-white shadow rounded-lg min-h-[530px] xl:h-[530px]">
-          <div className="px-4 py-5 sm:p-6 h-full flex flex-col">
-            <h3 className="text-lg leading-6 font-semibold text-gray-900 mb-6 flex items-center">
-              <ImageIcon className="h-5 w-5 mr-2 text-green-600" />
-              Generated image
+        <div className="bg-white shadow-lg rounded-xl h-[500px] sm:h-[600px]">
+          <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center">
+                <ImageIcon className="h-5 w-5 mr-2 text-purple-600" />
+                <span className="hidden sm:inline">Generated Image</span>
+                <span className="sm:hidden">Image</span>
             </h3>
-
-            {generatedImages.length === 0 && !isGenerating ? (
-              <div className="flex flex-col items-center justify-center text-center text-gray-500 flex-1">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <ImageIcon className="h-8 w-8 text-gray-300" />
+              {imageData.generatedImages.length > 0 && (
+                <div className="text-xs sm:text-sm text-gray-500">
+                  {imageData.generatedImages.length} image{imageData.generatedImages.length !== 1 ? 's' : ''}
                 </div>
-                <p className="text-sm">Describe an image and click "Generate Image" to get started</p>
+              )}
+            </div>
+
+            {imageData.generatedImages.length === 0 && !isGenerating && !isGeneratingImage ? (
+              <div className="flex flex-col items-center justify-center text-center text-gray-500 flex-1">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <ImageIcon className="h-8 w-8 sm:h-10 sm:w-10 text-gray-300" />
+                </div>
+                <p className="text-sm px-4">Describe an image and click "Generate Image" to get started</p>
               </div>
             ) : (
               <div className="flex-1 overflow-hidden">
                 {/* Loading skeleton */}
-                {isGenerating && (
+                {(isGenerating || isGeneratingImage) && (
                   <div className="w-full h-full bg-gray-200 rounded-xl animate-pulse flex items-center justify-center">
                     <div className="flex flex-col items-center space-y-4">
-                      <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-sm text-gray-600 font-medium">Generating your image...</p>
                     </div>
                   </div>
                 )}
                 
                 {/* Generated images */}
-                {!isGenerating && generatedImages.length > 0 && (
-                  <div className="w-full h-full">
-                    {generatedImages.map((image, index) => (
-                      <div key={index} className="relative group w-full h-full">
-                        <img
-                          src={image}
-                          alt={`Generated image ${index + 1}`}
-                          className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm"
-                        />
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-xl flex items-center justify-center">
-                          <div className="opacity-0 group-hover:opacity-100 flex flex-wrap gap-2 justify-center">
-                            <button 
-                              onClick={() => handlePreviewImage(image)}
-                              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                              title="Preview"
-                            >
-                              <Eye className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button 
-                              onClick={() => handleDownloadImage(image)}
-                              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                              title="Download"
-                            >
-                              <Download className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button 
-                              onClick={() => handleShareImage(image)}
-                              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                              title="Share"
-                            >
-                              <Share2 className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button 
-                              onClick={() => handlePublicToCommunity(image)}
-                              className="p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                              title="Share to Community"
-                            >
-                              <Globe className="h-4 w-4 text-gray-700" />
-                            </button>
-                            <button 
-                              onClick={() => handleDeleteImage(image)}
-                              className="p-2 bg-white rounded-full shadow-lg hover:bg-red-100 transition-colors cursor-pointer"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4 text-red-600" />
-                            </button>
+                {!isGenerating && !isGeneratingImage && imageData.generatedImages.length > 0 && (
+                  <div className="w-full h-full" style={{ minHeight: '400px', backgroundColor: '#f9fafb' }}>
+                    {imageData.generatedImages.map((image) => {
+                      console.log('Rendering image:', image);
+                      console.log('Image URL for display:', image.image_url);
+                      return (
+                        <div key={image.image_id} className="relative group w-full h-full" style={{ minHeight: '400px' }}>
+                          {/* Loading indicator */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-xl z-10">
+                            <div className="text-center">
+                              <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                              <p className="text-sm text-gray-600">Loading image...</p>
+                            </div>
                           </div>
+                          <img
+                            src={image.image_url}
+                            alt={`Generated image: ${image.prompt}`}
+                            className="w-full h-full object-cover rounded-xl border border-gray-200 shadow-sm relative z-20"
+                            onLoad={(e) => {
+                              console.log('Image loaded successfully');
+                              console.log('Image dimensions:', e.currentTarget.naturalWidth, 'x', e.currentTarget.naturalHeight);
+                              console.log('Image complete:', e.currentTarget.complete);
+                              console.log('Image src:', e.currentTarget.src);
+                              // Hide loading indicator
+                              const loadingIndicator = e.currentTarget.previousElementSibling as HTMLElement;
+                              if (loadingIndicator) {
+                                loadingIndicator.style.display = 'none';
+                              }
+                            }}
+                            onError={(e) => {
+                              console.error('Image failed to load:', e);
+                              console.error('Image URL that failed:', image.image_url);
+                              // Hide loading indicator and show error state
+                              const loadingIndicator = e.currentTarget.previousElementSibling as HTMLElement;
+                              if (loadingIndicator) {
+                                loadingIndicator.style.display = 'none';
+                              }
+                              e.currentTarget.style.display = 'none';
+                              const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                              if (nextElement) {
+                                nextElement.style.display = 'flex';
+                              }
+                            }}
+                            style={{ 
+                              minHeight: '200px',
+                              backgroundColor: '#f3f4f6',
+                              display: 'block',
+                              position: 'relative',
+                              zIndex: 20
+                            }}
+                          />
+                          {/* Error fallback */}
+                          <div className="w-full h-full bg-red-100 border-2 border-red-300 rounded-xl flex flex-col items-center justify-center text-red-600 hidden">
+                            <ImageIcon className="h-12 w-12 mb-2" />
+                            <p className="text-sm font-medium">Failed to load image</p>
+                            <p className="text-xs text-center px-4 mt-1">URL: {image.image_url}</p>
+                          </div>
+                        {/* Action buttons - always visible */}
+                        <div className="absolute top-2 right-2 flex gap-1 z-100">
+                          <button 
+                            onClick={() => handlePreviewImage(image.image_url)}
+                            className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all cursor-pointer"
+                            title="Preview"
+                          >
+                            <Eye className="h-4 w-4 text-gray-700" />
+                          </button>
+                          <button 
+                            onClick={() => handleDownloadImage(image.image_url)}
+                            className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-opacity-100 transition-all cursor-pointer"
+                            title="Download"
+                          >
+                            <Download className="h-4 w-4 text-gray-700" />
+                          </button>
+                          <button 
+                            onClick={() => handleLikeImage(image.image_id)}
+                            className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-red-100 transition-all cursor-pointer"
+                            title="Like"
+                          >
+                            <Heart className="h-4 w-4 text-red-500" />
+                          </button>
+                          <button 
+                            onClick={() => handlePublicToCommunity(image.image_id)}
+                            className={`p-2 rounded-full shadow-lg transition-all cursor-pointer ${
+                              image.is_community_published 
+                                ? 'bg-green-100 bg-opacity-90 hover:bg-opacity-100' 
+                                : 'bg-white bg-opacity-90 hover:bg-opacity-100'
+                            }`}
+                            title={image.is_community_published ? "Published to Community" : "Publish to Community"}
+                          >
+                            <Globe className={`h-4 w-4 ${image.is_community_published ? 'text-green-600' : 'text-gray-700'}`} />
+                          </button>
+                        </div>
+                        
+                        {/* Delete button - bottom right */}
+                        <div className="absolute bottom-2 right-2 z-10">
+                          <button 
+                            onClick={() => handleDeleteImage(image.image_id)}
+                            className="p-2 bg-white bg-opacity-90 rounded-full shadow-lg hover:bg-red-100 transition-all cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -414,6 +762,102 @@ export default function GenerateImages() {
           </div>
         </div>
       </div>
+
+      {/* Recent Creations Section */}
+      {userCreations?.data?.ai_images && userCreations.data.ai_images.length > 0 && (
+        <div className="mt-6 sm:mt-8">
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
+                <RefreshCw className="h-5 w-5 mr-2 text-purple-600" />
+                <span className="hidden sm:inline">Recent AI Images</span>
+                <span className="sm:hidden">Recent</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+                {userCreations.data.ai_images.slice(0, 6).map((image) => (
+                  <div key={image.image_id} className="group relative">
+                    <img
+                      src={image.image_url}
+                      alt={image.prompt}
+                      className="w-full h-24 sm:h-32 object-cover rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                        <button
+                          onClick={() => handlePreviewImage(image.image_url)}
+                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                          title="Preview"
+                        >
+                          <Eye className="h-3 w-3 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() => handleDownloadImage(image.image_url)}
+                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                          title="Download"
+                        >
+                          <Download className="h-3 w-3 text-gray-700" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500 truncate">{image.prompt}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Community Images Section */}
+      {communityImages?.data?.images && communityImages.data.images.length > 0 && (
+        <div className="mt-6 sm:mt-8">
+          <div className="bg-white shadow-lg rounded-xl">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6 flex items-center">
+                <Heart className="h-5 w-5 mr-2 text-purple-600" />
+                <span className="hidden sm:inline">Community Images</span>
+                <span className="sm:hidden">Community</span>
+              </h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 sm:gap-4">
+                {communityImages.data.images.slice(0, 12).map((image) => (
+                  <div key={image.image_id} className="group relative">
+                    <img
+                      src={image.image_url}
+                      alt={image.prompt}
+                      className="w-full h-24 sm:h-32 object-cover rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 rounded-lg flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 flex gap-1">
+                        <button
+                          onClick={() => handlePreviewImage(image.image_url)}
+                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-gray-100 transition-colors"
+                          title="Preview"
+                        >
+                          <Eye className="h-3 w-3 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={() => handleLikeImage(image.image_id)}
+                          className="p-1.5 bg-white rounded-full shadow-lg hover:bg-red-100 transition-colors"
+                          title="Like"
+                        >
+                          <Heart className="h-3 w-3 text-red-500" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                      <span className="truncate flex-1">{image.prompt}</span>
+                      <span className="ml-2 flex items-center">
+                        <Heart className="h-3 w-3 mr-1" />
+                        {image.likes_count}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Preview Modal */}
       {previewImage && (

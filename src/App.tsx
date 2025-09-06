@@ -11,8 +11,16 @@ import GenerateImages from './pages/dashboard/GenerateImages';
 import RemoveBackground from './pages/dashboard/RemoveBackground';
 import RemoveObject from './pages/dashboard/RemoveObject';
 import ReviewResume from './pages/dashboard/ReviewResume';
+import { useAuth } from '@clerk/clerk-react';
 
 export default function App() {
+
+  const {getToken} = useAuth()
+
+  // Ensure Clerk session is available once on app load
+  void getToken()
+
+
   return (
     <ErrorBoundary>
       <Routes>

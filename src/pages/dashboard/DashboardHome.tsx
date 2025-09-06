@@ -12,10 +12,12 @@ import {
   ArrowUpRight
 } from 'lucide-react';
 import { useState } from 'react';
+import { useGetMeQuery } from '../../services/api';
 
 export default function DashboardHome() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isFlipped, setIsFlipped] = useState(false);
+  const { data: me } = useGetMeQuery();
 
   // Account plan data
   const accountPlan = {
@@ -269,6 +271,9 @@ export default function DashboardHome() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold text-gray-900">Recent Activities</h3>
+              {me && (
+                <p className="text-gray-600 text-sm">Signed in as {me.email}</p>
+              )}
               <p className="text-gray-500 text-sm">Your latest creative work</p>
             </div>
             <div className="flex items-center gap-2">
