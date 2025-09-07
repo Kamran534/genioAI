@@ -285,10 +285,10 @@ export default function RemoveObject() {
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
+                {/* <h1 className="text-xl sm:text-2xl font-bold text-gray-900 flex items-center">
                   <Target className="h-5 w-5 sm:h-6 sm:w-6 mr-2 text-orange-600" />
                   Object Remover
-                </h1>
+                </h1> */}
                 
                 {/* Plan Status */}
                 <div className="flex items-center gap-2">
