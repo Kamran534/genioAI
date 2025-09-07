@@ -45,7 +45,7 @@ export interface NewsletterSubscribeResponse {
       email: string
       first_name: string | null
       last_name: string | null
-      preferences: any
+      preferences: Record<string, unknown>
       subscription_source: string
       is_active: boolean
       created_at: string
@@ -83,7 +83,7 @@ export interface NewsletterStatusResponse {
       email: string
       first_name: string | null
       last_name: string | null
-      preferences: any
+      preferences: Record<string, unknown>
       subscription_source: string
       is_active: boolean
       created_at: string
@@ -344,7 +344,15 @@ interface GlobalWithClerk {
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: import.meta.env.VITE_API_URL ?? '/api',
+    baseUrl: (() => {
+      const apiUrl = import.meta.env.VITE_API_URL ?? '/api';
+      console.log('🔗 API Base URL:', apiUrl);
+      console.log('🌍 Environment:', import.meta.env.MODE);
+      console.log('📦 All Vite Env Vars:', import.meta.env);
+      console.log('🔍 VITE_API_URL specifically:', import.meta.env.VITE_API_URL);
+      console.log('🔍 typeof VITE_API_URL:', typeof import.meta.env.VITE_API_URL);
+      return apiUrl;
+    })(),
     // Attach Clerk token automatically if available in the browser
     prepareHeaders: async (headers) => {
       const { Clerk } = globalThis as unknown as GlobalWithClerk
